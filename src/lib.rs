@@ -132,7 +132,7 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 // Helper functions to create triples
 fn create_type_triple(
-    subject: impl Into<oxrdf::Subject>,
+    subject: impl Into<oxrdf::NamedOrBlankNode>,
     class_name: &str,
 ) -> Result<Triple, Box<dyn Error + Send + Sync>> {
     // Use pokemonkg ontology for known classes, POKE namespace only for novel concepts
