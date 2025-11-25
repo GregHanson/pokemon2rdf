@@ -8,15 +8,14 @@ use rustemon::Follow;
 use std::error::Error;
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
-use tempfile::Builder;
 use tokio::sync::mpsc;
 
 // Pokemon ontology vocabulary namespace
-static POKE: &'static str = "http://purl.org/pokemon/ontology#";
+static POKE: &str = "http://purl.org/pokemon/ontology#";
 
 // Standard vocabulary namespaces for alignment
-static POKEMONKG: &'static str = "https://pokemonkg.org/ontology#";
-static SCHEMA: &'static str = "https://schema.org/";
+static POKEMONKG: &str = "https://pokemonkg.org/ontology#";
+static SCHEMA: &str = "https://schema.org/";
 // Reserved for future use:
 // static FOAF: &'static str = "http://xmlns.com/foaf/0.1/";
 // static DCTERMS: &'static str = "http://purl.org/dc/terms/";
@@ -27,26 +26,15 @@ static SCHEMA: &'static str = "https://schema.org/";
 pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = rustemon::client::RustemonClient::default();
 
-    let tmp_dir: tempfile::TempDir = match Builder::new().keep(true).tempdir() {
-        Ok(d) => d,
-        Err(e) => {
-            println!("Error creating temporary working dir: {:?}", e);
-            return Err(e.into());
-        }
-    };
+    // Generate output filename with current date: pokemon-YYYY-MM-DD.nt
+    let now = chrono::Local::now();
+    let filename = format!("pokemon-{}.nt", now.format("%Y-%m-%d"));
 
-    let combined_manual_nt_file = match Builder::new()
-        .suffix(".nt")
-        .append(true)
-        .keep(true)
-        .tempfile_in(tmp_dir.path())
-    {
-        Ok(f) => f,
-        Err(e) => {
-            println!("Error creating temporary file: {:?}", e);
-            return Err(e.into());
-        }
-    };
+    println!("Writing output to: {}", filename);
+
+    // Create/overwrite the output file in current working directory
+    let output_file = std::fs::File::create(&filename)
+        .map_err(|e| format!("Failed to create output file {}: {}", filename, e))?;
 
     let m = MultiProgress::new();
     let _sty = ProgressStyle::with_template(
@@ -58,10 +46,8 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Create an unbounded channel for sending triples from workers to writer
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
-    println!("{:?}", combined_manual_nt_file.path());
-
     // Spawn a dedicated writer task that consumes from the channel
-    let mut output_file = combined_manual_nt_file;
+    let mut output_file = output_file;
 
     let writer_handle = tokio::spawn(async move {
         let mut writer = BufWriter::new(&mut output_file);
@@ -84,23 +70,25 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Spawn all conversion tasks concurrently - each sends triples to the channel
     // let mut handles = vec![];
 
-    ability_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    damage_class_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    egg_group_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    evolution_chain_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    form_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    generation_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    growth_rate_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    habitat_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    location_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    move_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    move_target_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    pal_park_area_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    pokemon_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    region_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    shapes_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    species_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
-    type_to_nt_parallel(m.clone(), client.clone(), tx.clone()).await?;
+    ability_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    damage_class_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    egg_group_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    evolution_chain_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    form_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    generation_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    growth_rate_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    habitat_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    location_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    move_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    move_target_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    pal_park_area_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    pokemon_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    region_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    shapes_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    species_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    type_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    stats_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    natures_to_nt(m.clone(), client.clone(), tx.clone()).await?;
 
     // // Wait for all worker tasks to complete
     // for handle in handles {
@@ -134,17 +122,10 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // TODO MoveAilment
     // TODO MoveCategory
     // TODO VersionGroup
-    // TODO Stat ??
     // TODO PokeathonStat
     // TODO MoveBattleStyle
-    // TODO Nature
     // TODO PokemonForm
     // TODO MoveDamageClass
-
-    // need to delete trailing comma on previous line
-    // this needs to be on the same line of the last element
-    // writeln!(&combined_json_file, "]}}").unwrap();
-    // println!("{:?}", combined_file);
 
     Ok(())
 }
@@ -168,7 +149,7 @@ fn create_type_triple(
     })
 }
 
-async fn location_to_nt_parallel(
+async fn location_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -176,7 +157,7 @@ async fn location_to_nt_parallel(
     let all_locations = match rustemon::locations::location::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all locations: {:?}", e);
             return Err(e.into());
         }
     };
@@ -192,7 +173,7 @@ async fn location_to_nt_parallel(
         let location_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting location info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -261,7 +242,7 @@ async fn location_to_nt_parallel(
     Ok(())
 }
 
-async fn region_to_nt_parallel(
+async fn region_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -269,7 +250,7 @@ async fn region_to_nt_parallel(
     let all_regions = match rustemon::locations::region::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all regions: {:?}", e);
             return Err(e.into());
         }
     };
@@ -285,7 +266,7 @@ async fn region_to_nt_parallel(
         let region_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting region info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -329,7 +310,7 @@ async fn region_to_nt_parallel(
     Ok(())
 }
 
-async fn generation_to_nt_parallel(
+async fn generation_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -337,7 +318,7 @@ async fn generation_to_nt_parallel(
     let all_generations = match rustemon::games::generation::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all generations: {:?}", e);
             return Err(e.into());
         }
     };
@@ -353,7 +334,7 @@ async fn generation_to_nt_parallel(
         let gen_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting generation info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -436,7 +417,7 @@ async fn generation_to_nt_parallel(
     Ok(())
 }
 
-async fn move_target_to_nt_parallel(
+async fn move_target_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -444,7 +425,7 @@ async fn move_target_to_nt_parallel(
     let all_targets = match rustemon::moves::move_target::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all move targets: {:?}", e);
             return Err(e.into());
         }
     };
@@ -460,7 +441,7 @@ async fn move_target_to_nt_parallel(
         let target_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting move target info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -507,7 +488,7 @@ async fn move_target_to_nt_parallel(
     }
     Ok(())
 }
-async fn damage_class_to_nt_parallel(
+async fn damage_class_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -515,7 +496,7 @@ async fn damage_class_to_nt_parallel(
     let all_damages = match rustemon::moves::move_damage_class::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all damage classes: {:?}", e);
             return Err(e.into());
         }
     };
@@ -531,7 +512,7 @@ async fn damage_class_to_nt_parallel(
         let damage_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting damage class info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -568,7 +549,7 @@ async fn damage_class_to_nt_parallel(
     Ok(())
 }
 
-async fn growth_rate_to_nt_parallel(
+async fn growth_rate_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -576,7 +557,7 @@ async fn growth_rate_to_nt_parallel(
     let all_rates = match rustemon::pokemon::growth_rate::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all growth rates: {:?}", e);
             return Err(e.into());
         }
     };
@@ -592,7 +573,7 @@ async fn growth_rate_to_nt_parallel(
         let growth_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting growth rate: {:?}", e);
                 return Err(e.into());
             }
         };
@@ -659,7 +640,300 @@ async fn growth_rate_to_nt_parallel(
     Ok(())
 }
 
-async fn species_to_nt_parallel(
+async fn natures_to_nt(
+    bar: MultiProgress,
+    client: Arc<RustemonClient>,
+    tx: mpsc::UnboundedSender<String>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let all_natures = match rustemon::pokemon::nature::get_all_entries(&client).await {
+        Ok(list) => list,
+        Err(e) => {
+            println!("error getting all natures: {:?}", e);
+            return Err(e.into());
+        }
+    };
+
+    let pb = bar.add(ProgressBar::new(all_natures.len().try_into().unwrap()));
+    let mut index = 0;
+    for p in all_natures {
+        pb.set_message(format!("natures #{}", index + 1));
+        pb.inc(1);
+        index += 1;
+        let mut triples: Vec<Triple> = vec![];
+        let nature_id = NamedNodeRef::new(p.url.as_str())?;
+        let nature_json = match p.follow(&client).await {
+            Ok(list) => list,
+            Err(e) => {
+                println!("error getting nature info for {}: {e}", &p.url);
+                return Err(e.into());
+            }
+        };
+        // Add rdf:type declaration
+        triples.push(create_type_triple(nature_id, "Nature")?);
+
+        triples.push(Triple {
+            subject: nature_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
+            object: Literal::new_typed_literal(nature_json.id.to_string(), xsd::INTEGER).into(),
+        });
+        triples.push(Triple {
+            subject: nature_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
+            object: Literal::new_simple_literal(nature_json.name).into(),
+        });
+
+        if let Some(decrease) = nature_json.decreased_stat {
+            triples.push(Triple {
+                subject: nature_id.into(),
+                predicate: NamedNode::new(format!("{POKE}decreasedStat"))?,
+                object: NamedNode::new(decrease.url)?.into(),
+            });
+        }
+        if let Some(increase) = nature_json.increased_stat {
+            triples.push(Triple {
+                subject: nature_id.into(),
+                predicate: NamedNode::new(format!("{POKE}increasedStat"))?,
+                object: NamedNode::new(increase.url)?.into(),
+            });
+        }
+
+        if let Some(hates_flavor) = nature_json.hates_flavor {
+            triples.push(Triple {
+                subject: nature_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hatesFlavor"))?,
+                object: NamedNode::new(hates_flavor.url)?.into(),
+            });
+        }
+        if let Some(likes_flavor) = nature_json.likes_flavor {
+            triples.push(Triple {
+                subject: nature_id.into(),
+                predicate: NamedNode::new(format!("{POKE}likesFlavor"))?,
+                object: NamedNode::new(likes_flavor.url)?.into(),
+            });
+        }
+
+        for preference in nature_json.move_battle_style_preferences {
+            let pref_id = BlankNode::default();
+            triples.push(Triple {
+                subject: nature_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasMoveBattleStylePreference"))?,
+                object: pref_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: pref_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}lowHpPreference"))?,
+                object: Literal::new_typed_literal(
+                    preference.low_hp_preference.to_string(),
+                    xsd::INTEGER,
+                )
+                .into(),
+            });
+            triples.push(Triple {
+                subject: pref_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}highHpPreference"))?,
+                object: Literal::new_typed_literal(
+                    preference.high_hp_preference.to_string(),
+                    xsd::INTEGER,
+                )
+                .into(),
+            });
+            triples.push(Triple {
+                subject: pref_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}moveBattleStyle"))?,
+                object: NamedNode::new(preference.move_battle_style.url)?.into(),
+            });
+        }
+
+        for pokeathlon_stat in nature_json.pokeathlon_stat_changes {
+            let stat_change_id = BlankNode::default();
+            triples.push(Triple {
+                subject: nature_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasPokeathlonStatChange"))?,
+                object: stat_change_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: stat_change_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}maxChange"))?,
+                object: Literal::new_typed_literal(
+                    pokeathlon_stat.max_change.to_string(),
+                    xsd::INTEGER,
+                )
+                .into(),
+            });
+            triples.push(Triple {
+                subject: stat_change_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}pokeathlonStat"))?,
+                object: NamedNode::new(pokeathlon_stat.pokeathlon_stat.url)?.into(),
+            });
+        }
+
+        for name in nature_json.names {
+            // TODO only english for now
+            if name.language.name == "en" {
+                triples.push(Triple {
+                    subject: nature_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}names"))?,
+                    object: Literal::new_simple_literal(name.name).into(),
+                });
+            }
+        }
+
+        for t in triples {
+            tx.send(format!("{t} ."))
+                .map_err(|e| format!("Send error: {}", e))?
+        }
+    }
+
+    Ok(())
+}
+
+async fn stats_to_nt(
+    bar: MultiProgress,
+    client: Arc<RustemonClient>,
+    tx: mpsc::UnboundedSender<String>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let all_stats = match rustemon::pokemon::stat::get_all_entries(&client).await {
+        Ok(list) => list,
+        Err(e) => {
+            println!("error getting all stats: {:?}", e);
+            return Err(e.into());
+        }
+    };
+
+    let pb = bar.add(ProgressBar::new(all_stats.len().try_into().unwrap()));
+    let mut index = 0;
+    for p in all_stats {
+        pb.set_message(format!("stats #{}", index + 1));
+        pb.inc(1);
+        index += 1;
+        let mut triples: Vec<Triple> = vec![];
+        let stat_id = NamedNodeRef::new(p.url.as_str())?;
+        let stat_json = match p.follow(&client).await {
+            Ok(list) => list,
+            Err(e) => {
+                println!("error getting stat info for {}: {e}", &p.url);
+                return Err(e.into());
+            }
+        };
+        // Add rdf:type declaration
+        triples.push(create_type_triple(stat_id, "Stat")?);
+
+        triples.push(Triple {
+            subject: stat_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
+            object: Literal::new_typed_literal(stat_json.id.to_string(), xsd::INTEGER).into(),
+        });
+        triples.push(Triple {
+            subject: stat_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
+            object: Literal::new_simple_literal(stat_json.name).into(),
+        });
+
+        for decrease in stat_json.affecting_moves.decrease {
+            let affect_id = BlankNode::default();
+            triples.push(Triple {
+                subject: stat_id.into(),
+                predicate: NamedNode::new(format!("{POKE}decreasedByMove"))?,
+                object: affect_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: affect_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}change"))?,
+                object: Literal::new_typed_literal(decrease.change.to_string(), xsd::INTEGER)
+                    .into(),
+            });
+            triples.push(Triple {
+                subject: affect_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}move"))?,
+                object: NamedNode::new(decrease.move_.url)?.into(),
+            });
+        }
+        for increase in stat_json.affecting_moves.increase {
+            let affect_id = BlankNode::default();
+            triples.push(Triple {
+                subject: stat_id.into(),
+                predicate: NamedNode::new(format!("{POKE}increasedByMove"))?,
+                object: affect_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: affect_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}change"))?,
+                object: Literal::new_typed_literal(increase.change.to_string(), xsd::INTEGER)
+                    .into(),
+            });
+            triples.push(Triple {
+                subject: affect_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}move"))?,
+                object: NamedNode::new(increase.move_.url)?.into(),
+            });
+        }
+
+        for nature in stat_json.affecting_natures.increase {
+            triples.push(Triple {
+                subject: stat_id.into(),
+                predicate: NamedNode::new(format!("{POKE}increasedByNature"))?,
+                object: NamedNode::new(nature.url)?.into(),
+            });
+        }
+
+        for nature in stat_json.affecting_natures.decrease {
+            triples.push(Triple {
+                subject: stat_id.into(),
+                predicate: NamedNode::new(format!("{POKE}decreasedByNature"))?,
+                object: NamedNode::new(nature.url)?.into(),
+            });
+        }
+
+        for characteristic in stat_json.characteristics {
+            triples.push(Triple {
+                subject: stat_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasCharacteristic"))?,
+                object: NamedNode::new(characteristic.url)?.into(),
+            });
+        }
+
+        triples.push(Triple {
+            subject: stat_id.into(),
+            predicate: NamedNode::new(format!("{POKE}gameIndex"))?,
+            object: Literal::new_typed_literal(stat_json.game_index.to_string(), xsd::INTEGER)
+                .into(),
+        });
+
+        triples.push(Triple {
+            subject: stat_id.into(),
+            predicate: NamedNode::new(format!("{POKE}isBattleOnly"))?,
+            object: Literal::new_typed_literal(stat_json.is_battle_only.to_string(), xsd::BOOLEAN)
+                .into(),
+        });
+
+        if let Some(move_damage_class) = stat_json.move_damage_class {
+            triples.push(Triple {
+                subject: stat_id.into(),
+                predicate: NamedNode::new(format!("{POKE}moveDamageClass"))?,
+                object: NamedNode::new(move_damage_class.url)?.into(),
+            });
+        }
+
+        for name in stat_json.names {
+            // TODO only english for now
+            if name.language.name == "en" {
+                triples.push(Triple {
+                    subject: stat_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}names"))?,
+                    object: Literal::new_simple_literal(name.name).into(),
+                });
+            }
+        }
+
+        for t in triples {
+            tx.send(format!("{t} ."))
+                .map_err(|e| format!("Send error: {}", e))?
+        }
+    }
+    Ok(())
+}
+
+async fn species_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -667,7 +941,7 @@ async fn species_to_nt_parallel(
     let all_species = match rustemon::pokemon::pokemon_species::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all species: {:?}", e);
             return Err(e.into());
         }
     };
@@ -683,7 +957,7 @@ async fn species_to_nt_parallel(
         let species_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting species info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -937,7 +1211,7 @@ async fn species_to_nt_parallel(
     Ok(())
 }
 
-async fn evolution_chain_to_nt_parallel(
+async fn evolution_chain_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -961,7 +1235,7 @@ async fn evolution_chain_to_nt_parallel(
         let chain_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all shape: {:?}", e);
+                println!("error getting evolution chain info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -1159,7 +1433,7 @@ pub fn chain_link_to_nt(
     Ok(triples)
 }
 
-async fn pal_park_area_to_nt_parallel(
+async fn pal_park_area_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1183,7 +1457,7 @@ async fn pal_park_area_to_nt_parallel(
         let area_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting pal park area: {:?}", e);
+                println!("error getting pal park area info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -1245,7 +1519,7 @@ async fn pal_park_area_to_nt_parallel(
     Ok(())
 }
 
-async fn habitat_to_nt_parallel(
+async fn habitat_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1253,7 +1527,7 @@ async fn habitat_to_nt_parallel(
     let habitats = match rustemon::pokemon::pokemon_habitat::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all shapes: {:?}", e);
+            println!("error getting all habitats: {:?}", e);
             return Err(e.into());
         }
     };
@@ -1269,7 +1543,7 @@ async fn habitat_to_nt_parallel(
         let habitat_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all habitats: {:?}", e);
+                println!("error getting habitat info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -1309,7 +1583,7 @@ async fn habitat_to_nt_parallel(
     Ok(())
 }
 
-async fn shapes_to_nt_parallel(
+async fn shapes_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1333,7 +1607,7 @@ async fn shapes_to_nt_parallel(
         let shape_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all shape: {:?}", e);
+                println!("error getting shape info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -1383,7 +1657,7 @@ async fn shapes_to_nt_parallel(
     Ok(())
 }
 
-async fn egg_group_to_nt_parallel(
+async fn egg_group_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1407,7 +1681,7 @@ async fn egg_group_to_nt_parallel(
         let group_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all egg groups: {:?}", e);
+                println!("error getting egg group info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -1444,7 +1718,7 @@ async fn egg_group_to_nt_parallel(
     Ok(())
 }
 
-async fn form_to_nt_parallel(
+async fn form_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1452,7 +1726,7 @@ async fn form_to_nt_parallel(
     let all_forms = match rustemon::pokemon::pokemon_form::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all forms: {:?}", e);
             return Err(e.into());
         }
     };
@@ -1468,7 +1742,7 @@ async fn form_to_nt_parallel(
         let form_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting form info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -1565,7 +1839,7 @@ async fn form_to_nt_parallel(
     Ok(())
 }
 
-async fn type_to_nt_parallel(
+async fn type_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1712,7 +1986,7 @@ async fn type_to_nt_parallel(
     Ok(())
 }
 
-async fn move_to_nt_parallel(
+async fn move_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1720,7 +1994,7 @@ async fn move_to_nt_parallel(
     let all_moves = match rustemon::moves::move_::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all moves: {:?}", e);
             return Err(e.into());
         }
     };
@@ -1745,7 +2019,7 @@ async fn move_to_nt_parallel(
         let move_json = match m.follow(&client).await {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("Error getting type info for {}: {e}", &m.url);
+                eprintln!("Error getting move info for {}: {e}", &m.url);
                 return Err(e.into());
             }
         };
@@ -1991,7 +2265,7 @@ async fn move_to_nt_parallel(
     Ok(())
 }
 
-async fn ability_to_nt_parallel(
+async fn ability_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -1999,7 +2273,7 @@ async fn ability_to_nt_parallel(
     let all_abilities = match rustemon::pokemon::ability::get_all_entries(&client).await {
         Ok(list) => list,
         Err(e) => {
-            println!("error getting all pokemon: {:?}", e);
+            println!("error getting all abilities: {:?}", e);
             return Err(e.into());
         }
     };
@@ -2015,7 +2289,7 @@ async fn ability_to_nt_parallel(
         let ability_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting ability info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -2083,7 +2357,7 @@ async fn ability_to_nt_parallel(
     Ok(())
 }
 
-async fn pokemon_to_nt_parallel(
+async fn pokemon_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
@@ -2107,7 +2381,7 @@ async fn pokemon_to_nt_parallel(
         let pokemon_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
-                println!("error getting all pokemon: {:?}", e);
+                println!("error getting pokemon info for {}: {e}", &p.url);
                 return Err(e.into());
             }
         };
@@ -2242,6 +2516,30 @@ async fn pokemon_to_nt_parallel(
             predicate: NamedNode::new(format!("{POKE}species"))?,
             object: species_id.into(),
         });
+
+        for stat in pokemon_json.stats {
+            let stat_id = BlankNode::default();
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}pokemonStat"))?,
+                object: stat_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: stat_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}stat"))?,
+                object: NamedNode::new(stat.stat.url)?.into(),
+            });
+            triples.push(Triple {
+                subject: stat_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}baseStat"))?,
+                object: Literal::new_typed_literal(stat.base_stat.to_string(), xsd::INTEGER).into(),
+            });
+            triples.push(Triple {
+                subject: stat_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}effort"))?,
+                object: Literal::new_typed_literal(stat.effort.to_string(), xsd::INTEGER).into(),
+            });
+        }
         for t in triples {
             tx.send(format!("{t} ."))
                 .map_err(|e| format!("Send error: {}", e))?

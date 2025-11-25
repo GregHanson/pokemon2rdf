@@ -1,0 +1,21 @@
+PREFIX schema: <https://schema.org/>
+PREFIX poke: <http://purl.org/pokemon/ontology#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?pokemonName ?specialAttackStat
+WHERE {
+  # Find the giga-drain move
+  ?move schema:name "giga-drain" .
+  
+  # Find Pokemon that can learn this move
+  ?move poke:learnedBy ?pokemon .
+  
+  # Get Pokemon name
+  ?pokemon schema:name ?pokemonName .
+  
+  # Get the special-attack stat
+  ?pokemon poke:pokemonStat ?statNode .
+  ?statNode poke:stat <https://pokeapi.co/api/v2/stat/4/> .
+  ?statNode poke:baseStat ?specialAttackStat .
+}
+ORDER BY DESC(?specialAttackStat) ?pokemonName
