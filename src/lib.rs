@@ -36,14 +36,6 @@ static OWL: &'static str = "http://www.w3.org/2002/07/owl#";
 
 pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = rustemon::client::RustemonClient::default();
-    //let all_pokemon = get_all_pokemon(&client).await;
-    // let all_pokemon = match rustemon::pokemon::pokemon::get_all_entries(&client).await {
-    //     Ok(list) => list,
-    //     Err(e) => {
-    //         println!("error getting all pokemon: {:?}", e);
-    //         return Err(e.into());
-    //     }
-    // };
 
     let tmp_dir: tempfile::TempDir = match Builder::new().keep(true).tempdir() {
         Ok(d) => d,
@@ -52,36 +44,6 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
             return Err(e.into());
         }
     };
-    // creating a tempfile hold all the contents of the rdf outputs files
-    // let mut combined_file = match Builder::new()
-    //     .suffix(".nt")
-    //     .append(true)
-    //     .keep(true)
-    //     .tempfile_in(tmp_dir.path())
-    // {
-    //     Ok(f) => f,
-    //     Err(e) => {
-    //         println!("Error creating temporary file: {:?}", e);
-    //         return Err(e.into());
-    //     }
-    // };
-
-    // creating a tempfile hold all the contents of the rdf outputs files
-    // let mut combined_json_file = match Builder::new()
-    //     .suffix(".json")
-    //     .append(true)
-    //     .keep(true)
-    //     .tempfile_in(tmp_dir.path())
-    // {
-    //     Ok(f) => f,
-    //     Err(e) => {
-    //         println!("Error creating temporary file: {:?}", e);
-    //         return Err(e.into());
-    //     }
-    // };
-    // println!("json file: {}", combined_json_file.path().to_str().unwrap());
-    //
-    // write!(&combined_json_file, "{{ \"pokemon\": [").unwrap();
 
     let combined_manual_nt_file = match Builder::new()
         .suffix(".nt")
@@ -102,40 +64,7 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     )
     .unwrap()
     .progress_chars("##-");
-    // for res in all_pokemon.into_iter() {
-    //     bar.inc(1);
-    //     let pokemon = res.clone().name;
-    //     let pokemon_json = match res.follow(&client).await {
-    //         Ok(j) => j,
-    //         Err(e) => {
-    //             println!(
-    //                 "error getting info for pokemon {}: {:?}",
-    //                 pokemon.clone(),
-    //                 e
-    //             );
-    //             continue;
-    //         }
-    //     };
-    //     pokedex
-    //         .pokemon_to_nt(res, pokemon_json.clone(), &client)
-    //         .await?;
 
-    //     println!("pokemon: {}", pokemon);
-    //     let json_str = serde_json::to_string(&pokemon_json).unwrap();
-    //     writeln!(&combined_json_file, "{},", json_str).unwrap();
-    //     match json_to_rdf(&json_str, &tmp_dir, &mut combined_file).await {
-    //         Ok(g) => g,
-    //         Err(e) => {
-    //             println!(
-    //                 "error building graph for pokemon {}: {:?}",
-    //                 pokemon.clone(),
-    //                 e
-    //             );
-    //             return Err(e.into());
-    //         }
-    //     };
-    // }
-    // CHANNEL-BASED PARALLELIZATION:
     // Create an unbounded channel for sending triples from workers to writer
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
@@ -2406,68 +2335,6 @@ async fn pokemon_to_nt_parallel(
 
     Ok(())
 }
-
-// async fn json_to_rdf(
-//     input_json: &str,
-//     tmp_dir: &TempDir,
-//     triple_file: &mut NamedTempFile,
-// ) -> Result<(), std::io::Error> {
-//     let mut tmp_file = Builder::new()
-//         .tempfile()
-//         .expect("could not create temp file");
-
-//     writeln!(tmp_file, "{input_json}").expect("failed writing json to tmp file");
-
-//     let mut binding = Command::new("cat");
-//     let echo_child = binding
-//         .arg(tmp_file.path().to_str().unwrap())
-//         .stdout(Stdio::piped());
-
-//     let output = match echo_child.spawn() {
-//         Err(e) => {
-//             println!("Error running cat on JSON file: {:?}", e);
-//             return Err(e);
-//         }
-//         Ok(s) => s,
-//     };
-//     let echo_out = output.stdout.expect("Failed to open echo stdout");
-
-//     // let binding = self.json_validate_path().unwrap();
-//     // let json2rdf_call = vec!["-jar", binding.to_str().unwrap(), "https://decisym.ai/data"];
-//     let json2rdf_call = vec![
-//         "-jar",
-//         "/usr/lib/de/atomgraph/json2rdf-1.0.1-jar-with-dependencies.jar",
-//         POKE,
-//     ];
-
-//     // let mut output: Vec<u8> = vec![];
-
-//     let mut binding = Command::new("java");
-//     let sed_child = binding
-//         .args(json2rdf_call)
-//         .stdin(Stdio::from(echo_out))
-//         .stdout(Stdio::piped());
-
-//     let rdf_data = match sed_child.output() {
-//         Ok(g) => {
-//             if !g.status.success() {
-//                 println!(
-//                     "json2rdf returned non-zero status code: {}",
-//                     String::from_utf8_lossy(&g.stderr)
-//                 );
-//             };
-//             g
-//         }
-//         Err(e) => {
-//             println!("Failed to covert to RDF: {:?}", e);
-//             return Err(e);
-//         }
-//     };
-//     writeln!(triple_file, "{}", String::from_utf8_lossy(&rdf_data.stdout))
-//         .expect("could not write triples to temp file");
-
-//     Ok(())
-// }
 
 #[cfg(test)]
 mod tests {
