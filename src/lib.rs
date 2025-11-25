@@ -24,16 +24,15 @@ use tokio::sync::mpsc;
 // Pokemon ontology vocabulary namespace
 static POKE: &'static str = "http://purl.org/pokemon/ontology#";
 
+// Standard vocabulary namespaces for alignment
+static POKEMONKG: &'static str = "https://pokemonkg.org/ontology#";
+static SCHEMA: &'static str = "https://schema.org/";
+static FOAF: &'static str = "http://xmlns.com/foaf/0.1/";
+static DCTERMS: &'static str = "http://purl.org/dc/terms/";
+static OWL: &'static str = "http://www.w3.org/2002/07/owl#";
+
 // TODO can we add any of this to enhance the triples being built?
 // example: https://github.com/MarErius/Pokeapp/blob/main/MAINPROGRAM.py
-//
-// static PAPI: &'static str ="https://pokeapi.co/api/v2/pokemon/";
-// static BULB: &'static str = "https://bulbapedia.bulbagarden.net/wiki/";
-// static DBR: &'static str = "http://dbpedia.org/resource/";
-// static DUL: &'static str ="http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#";
-// static SCHEMA: &'static str = "http://schema.org/";
-// static WD: &'static str = "http://www.wikidata.org/entity/";
-// static RDFS: &'static str = "https://www.w3.org/2000/01/rdf-schema#";
 
 pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = rustemon::client::RustemonClient::default();
@@ -163,6 +162,13 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Wrap client in Arc for sharing across tasks
     let client = Arc::new(client);
 
+    // Send ontology alignment triples first
+    let alignment_triples = generate_ontology_alignments()?;
+    for triple in alignment_triples {
+        tx.send(format!("{}\n", triple))
+            .map_err(|e| format!("Send error: {}", e))?;
+    }
+
     // Spawn all conversion tasks concurrently - each sends triples to the channel
     // let mut handles = vec![];
 
@@ -267,6 +273,57 @@ fn create_object_property(
     })
 }
 
+// Generate ontology alignment triples (owl:equivalentClass, owl:equivalentProperty)
+fn generate_ontology_alignments() -> Result<Vec<Triple>, Box<dyn Error + Send + Sync>> {
+    let mut triples = vec![];
+    let owl_equivalent_class = NamedNode::new(format!("{}equivalentClass", OWL))?;
+    let owl_equivalent_property = NamedNode::new(format!("{}equivalentProperty", OWL))?;
+
+    // Class alignments with pokemonkg ontology
+    let class_mappings = vec![
+        ("Species", "Species"),
+        ("Ability", "Ability"),
+        ("Move", "Move"),
+        ("Type", "Type"),
+        ("Region", "Region"),
+        ("Habitat", "Habitat"),
+        ("EggGroup", "EggGroup"),
+        ("Generation", "Generation"),
+        ("Shape", "Shape"),
+    ];
+
+    for (our_class, their_class) in class_mappings {
+        triples.push(Triple {
+            subject: NamedNode::new(format!("{}{}", POKE, our_class))?.into(),
+            predicate: owl_equivalent_class.clone().into(),
+            object: NamedNode::new(format!("{}{}", POKEMONKG, their_class))?.into(),
+        });
+    }
+
+    // Property alignments with pokemonkg ontology
+    let property_mappings = vec![
+        ("hasType", "hasType"),
+        ("evolvesFrom", "evolvesFrom"),
+        ("mayHaveAbility", "mayHaveAbility"),
+        ("foundIn", "foundIn"),
+        ("inEggGroup", "inEggGroup"),
+        ("hasShape", "hasShape"),
+        ("accuracy", "accuracy"),
+        ("basePower", "basePower"),
+        ("basePowerPoints", "basePowerPoints"),
+    ];
+
+    for (our_prop, their_prop) in property_mappings {
+        triples.push(Triple {
+            subject: NamedNode::new(format!("{}{}", POKE, our_prop))?.into(),
+            predicate: owl_equivalent_property.clone().into(),
+            object: NamedNode::new(format!("{}{}", POKEMONKG, their_prop))?.into(),
+        });
+    }
+
+    Ok(triples)
+}
+
 async fn location_to_nt_parallel(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
@@ -300,12 +357,12 @@ async fn location_to_nt_parallel(
 
         triples.push(Triple {
             subject: location_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(location_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: location_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(location_json.name).into(),
         });
         if let Some(region) = location_json.region {
@@ -346,7 +403,7 @@ async fn location_to_nt_parallel(
         for a in location_json.areas {
             triples.push(Triple {
                 subject: location_id.into(),
-                predicate: NamedNode::new(format!("{POKE}name"))?,
+                predicate: NamedNode::new(format!("{SCHEMA}name"))?,
                 object: NamedNode::new(a.url)?.into(),
             });
             // TODO location_area_to_nt
@@ -394,12 +451,12 @@ async fn region_to_nt_parallel(
 
         triples.push(Triple {
             subject: region_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(region_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: region_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(region_json.name).into(),
         });
         for n in region_json.names {
@@ -461,12 +518,12 @@ async fn generation_to_nt_parallel(
 
         triples.push(Triple {
             subject: gen_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(gen_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: gen_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(gen_json.name).into(),
         });
         // abilities
@@ -568,14 +625,14 @@ async fn move_target_to_nt_parallel(
 
         triples.push(Triple {
             subject: target_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(p.name.clone()).into(),
         });
         for d in target_json.descriptions.clone() {
             if d.language.name == "en" {
                 triples.push(Triple {
                     subject: target_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}description"))?,
+                    predicate: NamedNode::new(format!("{SCHEMA}description"))?,
                     object: Literal::new_simple_literal(d.description).into(),
                 });
             }
@@ -639,13 +696,13 @@ async fn damage_class_to_nt_parallel(
 
         triples.push(Triple {
             subject: damage_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(p.name.clone()).into(),
         });
 
         triples.push(Triple {
             subject: damage_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(damage_json.id.to_string(), xsd::INTEGER).into(),
         });
         for d in damage_json.descriptions.clone() {
@@ -653,7 +710,7 @@ async fn damage_class_to_nt_parallel(
             if d.language.name == "en" {
                 triples.push(Triple {
                     subject: damage_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}description"))?,
+                    predicate: NamedNode::new(format!("{SCHEMA}description"))?,
                     object: Literal::new_simple_literal(d.description).into(),
                 });
             }
@@ -700,12 +757,12 @@ async fn growth_rate_to_nt_parallel(
 
         triples.push(Triple {
             subject: growth_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(growth_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: growth_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(growth_json.name).into(),
         });
         triples.push(Triple {
@@ -718,7 +775,7 @@ async fn growth_rate_to_nt_parallel(
             if d.language.name == "en" {
                 triples.push(Triple {
                     subject: growth_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}description"))?,
+                    predicate: NamedNode::new(format!("{SCHEMA}description"))?,
                     object: Literal::new_simple_literal(d.description).into(),
                 });
             }
@@ -791,12 +848,12 @@ async fn species_to_nt_parallel(
 
         triples.push(Triple {
             subject: species_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(species_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: species_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(species_json.name).into(),
         });
         // TODO order
@@ -881,7 +938,7 @@ async fn species_to_nt_parallel(
         for e in species_json.egg_groups {
             triples.push(Triple {
                 subject: species_id.into(),
-                predicate: NamedNode::new(format!("{POKE}eggGroup"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}inEggGroup"))?,
                 object: NamedNodeRef::new(e.url.as_str())?.into(),
             });
         }
@@ -895,7 +952,7 @@ async fn species_to_nt_parallel(
         if let Some(shape) = species_json.shape {
             triples.push(Triple {
                 subject: species_id.into(),
-                predicate: NamedNode::new(format!("{POKE}shape"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}hasShape"))?,
                 object: NamedNodeRef::new(&shape.url)?.into(),
             });
         }
@@ -903,7 +960,7 @@ async fn species_to_nt_parallel(
         if let Some(s) = species_json.evolves_from_species {
             triples.push(Triple {
                 subject: species_id.into(),
-                predicate: NamedNode::new(format!("{POKE}evolvesFrom"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}evolvesFrom"))?,
                 object: NamedNodeRef::new(s.url.as_str())?.into(),
             });
         }
@@ -919,7 +976,7 @@ async fn species_to_nt_parallel(
         if let Some(habitat) = species_json.habitat {
             triples.push(Triple {
                 subject: species_id.into(),
-                predicate: NamedNode::new(format!("{POKE}habitat"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}foundIn"))?,
                 object: NamedNodeRef::new(habitat.url.as_str())?.into(),
             });
         }
@@ -1069,7 +1126,7 @@ async fn evolution_chain_to_nt_parallel(
 
         triples.push(Triple {
             subject: chain_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(chain_json.id.to_string(), xsd::INTEGER).into(),
         });
 
@@ -1291,12 +1348,12 @@ async fn pal_park_area_to_nt_parallel(
 
         triples.push(Triple {
             subject: area_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(area_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: area_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(area_json.name).into(),
         });
 
@@ -1377,12 +1434,12 @@ async fn habitat_to_nt_parallel(
 
         triples.push(Triple {
             subject: habitat_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(habitat_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: habitat_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(habitat_json.name).into(),
         });
 
@@ -1441,12 +1498,12 @@ async fn shapes_to_nt_parallel(
 
         triples.push(Triple {
             subject: shape_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(shape_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: shape_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(shape_json.name).into(),
         });
 
@@ -1515,12 +1572,12 @@ async fn egg_group_to_nt_parallel(
 
         triples.push(Triple {
             subject: group_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(group_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: group_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(group_json.name).into(),
         });
         for name in group_json.names {
@@ -1576,12 +1633,12 @@ async fn form_to_nt_parallel(
 
         triples.push(Triple {
             subject: form_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(form_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: form_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(form_json.name).into(),
         });
         // TODO order
@@ -1619,7 +1676,7 @@ async fn form_to_nt_parallel(
         for t in form_json.types {
             triples.push(Triple {
                 subject: form_id.into(),
-                predicate: NamedNode::new(format!("{POKE}hasType"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}hasType"))?,
                 object: NamedNode::new(t.type_.url)?.into(),
             });
             // type information is already collected at the top level for pokemon, no need to duplicate the get logic here too
@@ -1698,12 +1755,12 @@ async fn type_to_nt_parallel(
 
         triples.push(Triple {
             subject: type_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(type_json.name).into(),
         });
         triples.push(Triple {
             subject: type_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(type_json.id.to_string(), xsd::INTEGER).into(),
         });
         for m in type_json.damage_relations.double_damage_from.clone() {
@@ -1838,7 +1895,7 @@ async fn move_to_nt_parallel(
 
         triples.push(Triple {
             subject: move_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(m.name.clone()).into(),
         });
         let move_json = match m.follow(&client).await {
@@ -1850,13 +1907,13 @@ async fn move_to_nt_parallel(
         };
         triples.push(Triple {
             subject: move_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(move_json.id.to_string(), xsd::INTEGER).into(),
         });
         if move_json.accuracy.is_some() {
             triples.push(Triple {
                 subject: move_id.into(),
-                predicate: NamedNode::new(format!("{POKE}accuracy"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}accuracy"))?,
                 object: Literal::new_typed_literal(
                     move_json.accuracy.unwrap().to_string(),
                     xsd::INTEGER,
@@ -1878,7 +1935,7 @@ async fn move_to_nt_parallel(
         if move_json.pp.is_some() {
             triples.push(Triple {
                 subject: move_id.into(),
-                predicate: NamedNode::new(format!("{POKE}pp"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}basePowerPoints"))?,
                 object: Literal::new_typed_literal(move_json.pp.unwrap().to_string(), xsd::INTEGER)
                     .into(),
             });
@@ -1891,7 +1948,7 @@ async fn move_to_nt_parallel(
         if move_json.power.is_some() {
             triples.push(Triple {
                 subject: move_id.into(),
-                predicate: NamedNode::new(format!("{POKE}power"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}basePower"))?,
                 object: Literal::new_typed_literal(
                     move_json.power.unwrap().to_string(),
                     xsd::INTEGER,
@@ -2057,7 +2114,7 @@ async fn move_to_nt_parallel(
             });
             triples.push(Triple {
                 subject: stat_change_id.as_ref().into(),
-                predicate: NamedNode::new(format!("{POKE}name"))?,
+                predicate: NamedNode::new(format!("{SCHEMA}name"))?,
                 object: Literal::new_simple_literal(stat.stat.name).into(),
             });
             triples.push(Triple {
@@ -2078,7 +2135,7 @@ async fn move_to_nt_parallel(
 
         triples.push(Triple {
             subject: move_id.into(),
-            predicate: NamedNode::new(format!("{POKE}hasType"))?,
+            predicate: NamedNode::new(format!("{POKEMONKG}hasType"))?,
             object: NamedNode::new(move_json.type_.url)?.into(),
         });
 
@@ -2123,12 +2180,12 @@ async fn ability_to_nt_parallel(
 
         triples.push(Triple {
             subject: ability_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(ability_json.name.clone()).into(),
         });
         triples.push(Triple {
             subject: ability_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(ability_json.id.to_string(), xsd::INTEGER).into(),
         });
 
@@ -2215,12 +2272,12 @@ async fn pokemon_to_nt_parallel(
 
         triples.push(Triple {
             subject: pokemon_id.into(),
-            predicate: NamedNode::new(format!("{POKE}id"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
             object: Literal::new_typed_literal(pokemon_json.id.to_string(), xsd::INTEGER).into(),
         });
         triples.push(Triple {
             subject: pokemon_id.into(),
-            predicate: NamedNode::new(format!("{POKE}name"))?,
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(pokemon_json.name).into(),
         });
         if pokemon_json.base_experience.is_some() {
@@ -2255,7 +2312,7 @@ async fn pokemon_to_nt_parallel(
         for t in pokemon_json.types.clone() {
             triples.push(Triple {
                 subject: pokemon_id.into(),
-                predicate: NamedNode::new(format!("{POKE}hasType"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}hasType"))?,
                 object: NamedNode::new(&t.type_.url)?.into(),
             });
         }
@@ -2264,7 +2321,7 @@ async fn pokemon_to_nt_parallel(
         for a in pokemon_json.abilities.clone() {
             triples.push(Triple {
                 subject: pokemon_id.into(),
-                predicate: NamedNode::new(format!("{POKE}hasAbility"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}mayHaveAbility"))?,
                 object: NamedNode::new(&a.ability.url)?.into(),
             })
         }
