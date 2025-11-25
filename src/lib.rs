@@ -4,21 +4,11 @@ use oxrdf::{vocab, BlankNode};
 use oxrdf::{Literal, NamedNode, NamedNodeRef, Triple};
 use rustemon::client::RustemonClient;
 use rustemon::model::evolution::ChainLink;
-use rustemon::model::games::Generation;
-use rustemon::model::locations::{Location, Region};
-use rustemon::model::moves::{Move, MoveDamageClass, MoveTarget};
-use rustemon::model::pokemon::PokemonType;
-use rustemon::model::pokemon::{
-    GrowthRate, Pokemon, PokemonForm, PokemonMove, PokemonSpecies, Type,
-};
-use rustemon::model::resource::NamedApiResource;
-use rustemon::moves::move_;
 use rustemon::Follow;
 use std::error::Error;
 use std::io::{BufWriter, Write};
-use std::process::{Command, Stdio};
 use std::sync::Arc;
-use tempfile::{Builder, NamedTempFile, TempDir};
+use tempfile::Builder;
 use tokio::sync::mpsc;
 
 // Pokemon ontology vocabulary namespace
@@ -27,9 +17,9 @@ static POKE: &'static str = "http://purl.org/pokemon/ontology#";
 // Standard vocabulary namespaces for alignment
 static POKEMONKG: &'static str = "https://pokemonkg.org/ontology#";
 static SCHEMA: &'static str = "https://schema.org/";
-static FOAF: &'static str = "http://xmlns.com/foaf/0.1/";
-static DCTERMS: &'static str = "http://purl.org/dc/terms/";
-static OWL: &'static str = "http://www.w3.org/2002/07/owl#";
+// Reserved for future use:
+// static FOAF: &'static str = "http://xmlns.com/foaf/0.1/";
+// static DCTERMS: &'static str = "http://purl.org/dc/terms/";
 
 // TODO can we add any of this to enhance the triples being built?
 // example: https://github.com/MarErius/Pokeapp/blob/main/MAINPROGRAM.py
@@ -59,7 +49,7 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     };
 
     let m = MultiProgress::new();
-    let sty = ProgressStyle::with_template(
+    let _sty = ProgressStyle::with_template(
         "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
     )
     .unwrap()
@@ -90,13 +80,6 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     // Wrap client in Arc for sharing across tasks
     let client = Arc::new(client);
-
-    // Send ontology alignment triples first
-    let alignment_triples = generate_ontology_alignments()?;
-    for triple in alignment_triples {
-        tx.send(format!("{}\n", triple))
-            .map_err(|e| format!("Send error: {}", e))?;
-    }
 
     // Spawn all conversion tasks concurrently - each sends triples to the channel
     // let mut handles = vec![];
@@ -171,86 +154,18 @@ fn create_type_triple(
     subject: impl Into<oxrdf::Subject>,
     class_name: &str,
 ) -> Result<Triple, Box<dyn Error + Send + Sync>> {
+    // Use pokemonkg ontology for known classes, POKE namespace only for novel concepts
+    let namespace = match class_name {
+        "Species" | "Ability" | "Move" | "Type" | "Region" | "Habitat" | "EggGroup"
+        | "Generation" | "Shape" | "Pokémon" => POKEMONKG,
+        _ => POKE,
+    };
+
     Ok(Triple {
         subject: subject.into(),
         predicate: vocab::rdf::TYPE.into(),
-        object: NamedNode::new(format!("{}{}", POKE, class_name))?.into(),
+        object: NamedNode::new(format!("{}{}", namespace, class_name))?.into(),
     })
-}
-
-fn create_data_property(
-    subject: impl Into<oxrdf::Subject>,
-    property: &str,
-    value: Literal,
-) -> Result<Triple, Box<dyn Error + Send + Sync>> {
-    Ok(Triple {
-        subject: subject.into(),
-        predicate: NamedNode::new(format!("{}{}", POKE, property))?,
-        object: value.into(),
-    })
-}
-
-fn create_object_property(
-    subject: impl Into<oxrdf::Subject>,
-    property: &str,
-    object: impl Into<oxrdf::Term>,
-) -> Result<Triple, Box<dyn Error + Send + Sync>> {
-    Ok(Triple {
-        subject: subject.into(),
-        predicate: NamedNode::new(format!("{}{}", POKE, property))?,
-        object: object.into(),
-    })
-}
-
-// Generate ontology alignment triples (owl:equivalentClass, owl:equivalentProperty)
-fn generate_ontology_alignments() -> Result<Vec<Triple>, Box<dyn Error + Send + Sync>> {
-    let mut triples = vec![];
-    let owl_equivalent_class = NamedNode::new(format!("{}equivalentClass", OWL))?;
-    let owl_equivalent_property = NamedNode::new(format!("{}equivalentProperty", OWL))?;
-
-    // Class alignments with pokemonkg ontology
-    let class_mappings = vec![
-        ("Species", "Species"),
-        ("Ability", "Ability"),
-        ("Move", "Move"),
-        ("Type", "Type"),
-        ("Region", "Region"),
-        ("Habitat", "Habitat"),
-        ("EggGroup", "EggGroup"),
-        ("Generation", "Generation"),
-        ("Shape", "Shape"),
-    ];
-
-    for (our_class, their_class) in class_mappings {
-        triples.push(Triple {
-            subject: NamedNode::new(format!("{}{}", POKE, our_class))?.into(),
-            predicate: owl_equivalent_class.clone().into(),
-            object: NamedNode::new(format!("{}{}", POKEMONKG, their_class))?.into(),
-        });
-    }
-
-    // Property alignments with pokemonkg ontology
-    let property_mappings = vec![
-        ("hasType", "hasType"),
-        ("evolvesFrom", "evolvesFrom"),
-        ("mayHaveAbility", "mayHaveAbility"),
-        ("foundIn", "foundIn"),
-        ("inEggGroup", "inEggGroup"),
-        ("hasShape", "hasShape"),
-        ("accuracy", "accuracy"),
-        ("basePower", "basePower"),
-        ("basePowerPoints", "basePowerPoints"),
-    ];
-
-    for (our_prop, their_prop) in property_mappings {
-        triples.push(Triple {
-            subject: NamedNode::new(format!("{}{}", POKE, our_prop))?.into(),
-            predicate: owl_equivalent_property.clone().into(),
-            object: NamedNode::new(format!("{}{}", POKEMONKG, their_prop))?.into(),
-        });
-    }
-
-    Ok(triples)
 }
 
 async fn location_to_nt_parallel(
@@ -874,7 +789,7 @@ async fn species_to_nt_parallel(
         // TODO color
         triples.push(Triple {
             subject: species_id.into(),
-            predicate: NamedNode::new(format!("{POKE}color"))?,
+            predicate: NamedNode::new(format!("{POKEMONKG}hasColour"))?,
             object: NamedNodeRef::new(&species_json.color.url)?.into(),
         });
         // TODO shape
@@ -992,7 +907,7 @@ async fn species_to_nt_parallel(
             if g.language.name == "en" {
                 triples.push(Triple {
                     subject: species_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}genus"))?,
+                    predicate: NamedNode::new(format!("{POKEMONKG}hasGenus"))?,
                     object: Literal::new_simple_literal(g.genus).into(),
                 });
             }
@@ -1160,7 +1075,7 @@ pub fn chain_link_to_nt(
         if let Some(lvl) = detail.min_level {
             triples.push(Triple {
                 subject: detail_id.as_ref().into(),
-                predicate: NamedNode::new(format!("{POKE}minLevel"))?,
+                predicate: NamedNode::new(format!("{POKEMONKG}minLevelToLearn"))?,
                 object: Literal::new_typed_literal(lvl.to_string(), xsd::INTEGER).into(),
             });
         }
@@ -1900,12 +1815,12 @@ async fn move_to_nt_parallel(
             if effect.language.name == "en" {
                 triples.push(Triple {
                     subject: move_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}effect"))?,
+                    predicate: NamedNode::new(format!("{POKEMONKG}effectDescription"))?,
                     object: Literal::new_simple_literal(effect.effect).into(),
                 });
                 triples.push(Triple {
                     subject: move_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}shortEffect"))?,
+                    predicate: NamedNode::new(format!("{POKEMONKG}effectDescription"))?,
                     object: Literal::new_simple_literal(effect.short_effect).into(),
                 });
             }
@@ -2133,12 +2048,12 @@ async fn ability_to_nt_parallel(
             if v.language.name == "en" {
                 triples.push(Triple {
                     subject: ability_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}effect"))?,
+                    predicate: NamedNode::new(format!("{POKEMONKG}effectDescription"))?,
                     object: Literal::new_simple_literal(v.effect).into(),
                 });
                 triples.push(Triple {
                     subject: ability_id.into(),
-                    predicate: NamedNode::new(format!("{POKE}shortEffect"))?,
+                    predicate: NamedNode::new(format!("{POKEMONKG}effectDescription"))?,
                     object: Literal::new_simple_literal(v.short_effect).into(),
                 });
             }
