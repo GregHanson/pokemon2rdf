@@ -89,6 +89,9 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     type_to_nt(m.clone(), client.clone(), tx.clone()).await?;
     stats_to_nt(m.clone(), client.clone(), tx.clone()).await?;
     natures_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    triggers_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    pokedex_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    item_to_nt(m.clone(), client.clone(), tx.clone()).await?;
 
     // // Wait for all worker tasks to complete
     // for handle in handles {
@@ -102,14 +105,11 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     writer_handle.await??;
 
     // TODO BerryFirmness
-    // TODO Item
     // TODO Berry Flavor
     // TODO Berry
     // TODO ContestType
     // TODO EncounterCondition
     // TODO EncounterConditionValue
-    // TODO EvolutionTrigger
-    // TODO Pokedex
     // TODO MoveLearnMethod
     // TODO Version
     // TODO ItemFlingEffect
@@ -124,8 +124,6 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // TODO VersionGroup
     // TODO PokeathonStat
     // TODO MoveBattleStyle
-    // TODO PokemonForm
-    // TODO MoveDamageClass
 
     Ok(())
 }
@@ -163,11 +161,9 @@ async fn location_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_locations.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_locations {
+    for (index, p) in all_locations.into_iter().enumerate() {
         pb.set_message(format!("location #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let location_id = NamedNodeRef::new(p.url.as_str())?;
         let location_json = match p.follow(&client).await {
@@ -256,11 +252,9 @@ async fn region_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_regions.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_regions {
+    for (index, p) in all_regions.into_iter().enumerate() {
         pb.set_message(format!("region #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let region_id = NamedNodeRef::new(p.url.as_str())?;
         let region_json = match p.follow(&client).await {
@@ -324,11 +318,9 @@ async fn generation_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_generations.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_generations {
+    for (index, p) in all_generations.into_iter().enumerate() {
         pb.set_message(format!("generation #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let gen_id = NamedNodeRef::new(p.url.as_str())?;
         let gen_json = match p.follow(&client).await {
@@ -431,11 +423,9 @@ async fn move_target_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_targets.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_targets {
+    for (index, p) in all_targets.into_iter().enumerate() {
         pb.set_message(format!("move target #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let target_id = NamedNodeRef::new(p.url.as_str())?;
         let target_json = match p.follow(&client).await {
@@ -502,11 +492,9 @@ async fn damage_class_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_damages.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_damages {
+    for (index, p) in all_damages.into_iter().enumerate() {
         pb.set_message(format!("move damage class #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let damage_id = NamedNodeRef::new(p.url.as_str())?;
         let damage_json = match p.follow(&client).await {
@@ -563,11 +551,9 @@ async fn growth_rate_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_rates.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_rates {
+    for (index, p) in all_rates.into_iter().enumerate() {
         pb.set_message(format!("growth rate #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let growth_id = NamedNodeRef::new(p.url.as_str())?;
         let growth_json = match p.follow(&client).await {
@@ -640,6 +626,359 @@ async fn growth_rate_to_nt(
     Ok(())
 }
 
+async fn item_to_nt(
+    bar: MultiProgress,
+    client: Arc<RustemonClient>,
+    tx: mpsc::UnboundedSender<String>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let all_items = match rustemon::items::item::get_all_entries(&client).await {
+        Ok(list) => list,
+        Err(e) => {
+            println!("error getting all items: {:?}", e);
+            return Err(e.into());
+        }
+    };
+
+    let pb = bar.add(ProgressBar::new(all_items.len().try_into().unwrap()));
+    for (index, p) in all_items.into_iter().enumerate() {
+        pb.set_message(format!("items #{}", index + 1));
+        pb.inc(1);
+        let mut triples: Vec<Triple> = vec![];
+        let item_id = NamedNodeRef::new(p.url.as_str())?;
+        let item_json = match p.follow(&client).await {
+            Ok(list) => list,
+            Err(e) => {
+                println!("error getting item info for {}: {e}", &p.url);
+                return Err(e.into());
+            }
+        };
+        // Add rdf:type declaration
+        triples.push(create_type_triple(item_id, "Item")?);
+
+        triples.push(Triple {
+            subject: item_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
+            object: Literal::new_typed_literal(item_json.id.to_string(), xsd::INTEGER).into(),
+        });
+        triples.push(Triple {
+            subject: item_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
+            object: Literal::new_simple_literal(item_json.name).into(),
+        });
+
+        triples.push(Triple {
+            subject: item_id.into(),
+            predicate: NamedNode::new(format!("{POKE}cost"))?,
+            object: Literal::new_typed_literal(item_json.cost.to_string(), xsd::INTEGER).into(),
+        });
+
+        if let Some(power) = item_json.fling_power {
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}flingPower"))?,
+                object: Literal::new_typed_literal(power.to_string(), xsd::INTEGER).into(),
+            });
+        }
+        if let Some(effect) = item_json.fling_effect {
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}flingEffect"))?,
+                object: NamedNode::new(effect.url)?.into(),
+            });
+        }
+
+        for attribute in item_json.attributes {
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasAttribute"))?,
+                object: NamedNode::new(attribute.url)?.into(),
+            });
+        }
+
+        triples.push(Triple {
+            subject: item_id.into(),
+            predicate: NamedNode::new(format!("{POKE}itemCategory"))?,
+            object: NamedNode::new(item_json.category.url)?.into(),
+        });
+
+        for effect in item_json.effect_entries {
+            // TODO only english for now
+            if effect.language.name == "en" {
+                let effect_id = BlankNode::default();
+                triples.push(Triple {
+                    subject: item_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}hasEffect"))?,
+                    object: effect_id.as_ref().into(),
+                });
+                triples.push(Triple {
+                    subject: effect_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{SCHEMA}description"))?,
+                    object: Literal::new_simple_literal(effect.effect).into(),
+                });
+                triples.push(Triple {
+                    subject: effect_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}shortEffect"))?,
+                    object: Literal::new_simple_literal(effect.short_effect).into(),
+                });
+            }
+        }
+
+        for flavor_text in item_json.flavor_text_entries {
+            // TODO only english for now
+            if flavor_text.language.name == "en" {
+                triples.push(Triple {
+                    subject: item_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}hasFlavorText"))?,
+                    object: Literal::new_simple_literal(flavor_text.text).into(),
+                });
+            }
+        }
+
+        // TODO game_indices
+
+        for name in item_json.names {
+            // TODO only english for now
+            if name.language.name == "en" {
+                triples.push(Triple {
+                    subject: item_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}names"))?,
+                    object: Literal::new_simple_literal(name.name).into(),
+                });
+            }
+        }
+
+        // TODO sprites
+
+        for poke in item_json.held_by_pokemon {
+            let hold_id = BlankNode::default();
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}heldByPokemon"))?,
+                object: hold_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: hold_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}pokemon"))?,
+                object: NamedNode::new(poke.pokemon.url)?.into(),
+            });
+            for version_detail in poke.version_details {
+                let version_detail_id = BlankNode::default();
+                triples.push(Triple {
+                    subject: hold_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}versionDetail"))?,
+                    object: version_detail_id.as_ref().into(),
+                });
+                triples.push(Triple {
+                    subject: version_detail_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}rarity"))?,
+                    object: Literal::new_typed_literal(
+                        version_detail.rarity.to_string(),
+                        xsd::INTEGER,
+                    )
+                    .into(),
+                });
+                triples.push(Triple {
+                    subject: version_detail_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}version"))?,
+                    object: NamedNode::new(version_detail.version.url)?.into(),
+                });
+            }
+        }
+
+        if let Some(baby_trigger) = item_json.baby_trigger_for {
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}babyTriggerFor"))?,
+                object: NamedNode::new(baby_trigger.url)?.into(),
+            });
+        }
+
+        // TODO machines
+
+        for t in triples {
+            tx.send(format!("{t} ."))
+                .map_err(|e| format!("Send error: {}", e))?
+        }
+    }
+    Ok(())
+}
+
+async fn pokedex_to_nt(
+    bar: MultiProgress,
+    client: Arc<RustemonClient>,
+    tx: mpsc::UnboundedSender<String>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let all_pokedexes = match rustemon::games::pokedex::get_all_entries(&client).await {
+        Ok(list) => list,
+        Err(e) => {
+            println!("error getting all pokedexes: {:?}", e);
+            return Err(e.into());
+        }
+    };
+
+    let pb = bar.add(ProgressBar::new(all_pokedexes.len().try_into().unwrap()));
+    for (index, p) in all_pokedexes.into_iter().enumerate() {
+        pb.set_message(format!("pokedexes #{}", index + 1));
+        pb.inc(1);
+        let mut triples: Vec<Triple> = vec![];
+        let pokedex_id = NamedNodeRef::new(p.url.as_str())?;
+        let pokedex_json = match p.follow(&client).await {
+            Ok(list) => list,
+            Err(e) => {
+                println!("error getting pokedex info for {}: {e}", &p.url);
+                return Err(e.into());
+            }
+        };
+        // Add rdf:type declaration
+        triples.push(create_type_triple(pokedex_id, "Pokedex")?);
+
+        triples.push(Triple {
+            subject: pokedex_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
+            object: Literal::new_typed_literal(pokedex_json.id.to_string(), xsd::INTEGER).into(),
+        });
+        triples.push(Triple {
+            subject: pokedex_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
+            object: Literal::new_simple_literal(pokedex_json.name).into(),
+        });
+
+        // TODO is_main_series
+
+        for description in pokedex_json.descriptions {
+            // TODO only english for now
+            if description.language.name == "en" {
+                triples.push(Triple {
+                    subject: pokedex_id.into(),
+                    predicate: NamedNode::new(format!("{SCHEMA}description"))?,
+                    object: Literal::new_simple_literal(description.description).into(),
+                });
+            }
+        }
+
+        for name in pokedex_json.names {
+            // TODO only english for now
+            if name.language.name == "en" {
+                triples.push(Triple {
+                    subject: pokedex_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}names"))?,
+                    object: Literal::new_simple_literal(name.name).into(),
+                });
+            }
+        }
+
+        for entry in pokedex_json.pokemon_entries {
+            let entry_id = BlankNode::default();
+            triples.push(Triple {
+                subject: pokedex_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasPokedexEntry"))?,
+                object: entry_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: entry_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}entryNumber"))?,
+                object: Literal::new_typed_literal(entry.entry_number.to_string(), xsd::INTEGER)
+                    .into(),
+            });
+            triples.push(Triple {
+                subject: entry_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}species"))?,
+                object: NamedNode::new(entry.pokemon_species.url)?.into(),
+            });
+        }
+
+        if let Some(region) = pokedex_json.region {
+            triples.push(Triple {
+                subject: pokedex_id.into(),
+                predicate: NamedNode::new(format!("{POKE}region"))?,
+                object: NamedNode::new(region.url)?.into(),
+            });
+        }
+
+        for group in pokedex_json.version_groups {
+            triples.push(Triple {
+                subject: pokedex_id.into(),
+                predicate: NamedNode::new(format!("{POKE}versionGroup"))?,
+                object: NamedNode::new(group.url)?.into(),
+            });
+        }
+
+        for t in triples {
+            tx.send(format!("{t} ."))
+                .map_err(|e| format!("Send error: {}", e))?
+        }
+    }
+    Ok(())
+}
+
+async fn triggers_to_nt(
+    bar: MultiProgress,
+    client: Arc<RustemonClient>,
+    tx: mpsc::UnboundedSender<String>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let all_triggers = match rustemon::evolution::evolution_trigger::get_all_entries(&client).await
+    {
+        Ok(list) => list,
+        Err(e) => {
+            println!("error getting all evolution triggers: {:?}", e);
+            return Err(e.into());
+        }
+    };
+
+    let pb = bar.add(ProgressBar::new(all_triggers.len().try_into().unwrap()));
+    for (index, p) in all_triggers.into_iter().enumerate() {
+        pb.set_message(format!("triggers #{}", index + 1));
+        pb.inc(1);
+        let mut triples: Vec<Triple> = vec![];
+        let trigger_id = NamedNodeRef::new(p.url.as_str())?;
+        let trigger_json = match p.follow(&client).await {
+            Ok(list) => list,
+            Err(e) => {
+                println!("error getting trigger info for {}: {e}", &p.url);
+                return Err(e.into());
+            }
+        };
+        // Add rdf:type declaration
+        triples.push(create_type_triple(trigger_id, "EvolutionTrigger")?);
+
+        triples.push(Triple {
+            subject: trigger_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
+            object: Literal::new_typed_literal(trigger_json.id.to_string(), xsd::INTEGER).into(),
+        });
+        triples.push(Triple {
+            subject: trigger_id.into(),
+            predicate: NamedNode::new(format!("{SCHEMA}name"))?,
+            object: Literal::new_simple_literal(trigger_json.name).into(),
+        });
+
+        for name in trigger_json.names {
+            // TODO only english for now
+            if name.language.name == "en" {
+                triples.push(Triple {
+                    subject: trigger_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}names"))?,
+                    object: Literal::new_simple_literal(name.name).into(),
+                });
+            }
+        }
+
+        for species in trigger_json.pokemon_species {
+            triples.push(Triple {
+                subject: trigger_id.into(),
+                predicate: NamedNode::new(format!("{POKE}triggersSpecies"))?,
+                object: NamedNode::new(species.url)?.into(),
+            });
+        }
+
+        for t in triples {
+            tx.send(format!("{t} ."))
+                .map_err(|e| format!("Send error: {}", e))?
+        }
+    }
+    Ok(())
+}
+
 async fn natures_to_nt(
     bar: MultiProgress,
     client: Arc<RustemonClient>,
@@ -654,11 +993,9 @@ async fn natures_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_natures.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_natures {
+    for (index, p) in all_natures.into_iter().enumerate() {
         pb.set_message(format!("natures #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let nature_id = NamedNodeRef::new(p.url.as_str())?;
         let nature_json = match p.follow(&client).await {
@@ -801,11 +1138,9 @@ async fn stats_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_stats.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_stats {
+    for (index, p) in all_stats.into_iter().enumerate() {
         pb.set_message(format!("stats #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let stat_id = NamedNodeRef::new(p.url.as_str())?;
         let stat_json = match p.follow(&client).await {
@@ -947,11 +1282,9 @@ async fn species_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_species.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_species {
+    for (index, p) in all_species.into_iter().enumerate() {
         pb.set_message(format!("species #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let species_id = NamedNodeRef::new(p.url.as_str())?;
         let species_json = match p.follow(&client).await {
@@ -1050,7 +1383,25 @@ async fn species_to_nt(
         });
 
         // TODO pokedex_numbers
-        for p in species_json.pokedex_numbers {}
+        for pokedex in species_json.pokedex_numbers {
+            let pdx_id = BlankNode::default();
+            triples.push(Triple {
+                subject: species_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasPokedexNumber"))?,
+                object: pdx_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: pdx_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}entryNumber"))?,
+                object: Literal::new_typed_literal(pokedex.entry_number.to_string(), xsd::INTEGER)
+                    .into(),
+            });
+            triples.push(Triple {
+                subject: pdx_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}pokedex"))?,
+                object: NamedNode::new(pokedex.pokedex.url)?.into(),
+            });
+        }
 
         // TODO egg_groups
         for e in species_json.egg_groups {
@@ -1225,11 +1576,9 @@ async fn evolution_chain_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(chains.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in chains {
+    for (index, p) in chains.into_iter().enumerate() {
         pb.set_message(format!("evolution chain #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let chain_id = NamedNodeRef::new(p.url.as_str())?;
         let chain_json = match p.follow(&client).await {
@@ -1261,7 +1610,7 @@ async fn evolution_chain_to_nt(
 
         // TODO evolves_to
         for evolve in &chain_json.chain.evolves_to {
-            triples.extend_from_slice(&chain_link_to_nt(chain_id, &evolve)?);
+            triples.extend_from_slice(&chain_link_to_nt(chain_id, evolve)?);
         }
         for t in triples {
             tx.send(format!("{t} ."))
@@ -1447,11 +1796,9 @@ async fn pal_park_area_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(areas.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in areas {
+    for (index, p) in areas.into_iter().enumerate() {
         pb.set_message(format!("pal park area #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let area_id = NamedNodeRef::new(p.url.as_str())?;
         let area_json = match p.follow(&client).await {
@@ -1533,11 +1880,9 @@ async fn habitat_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(habitats.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in habitats {
+    for (index, p) in habitats.into_iter().enumerate() {
         pb.set_message(format!("habitat #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let habitat_id = NamedNodeRef::new(p.url.as_str())?;
         let habitat_json = match p.follow(&client).await {
@@ -1572,7 +1917,13 @@ async fn habitat_to_nt(
             }
         }
 
-        // TODO pokemon species: skip since same query can be acheived by querying '?species pdb:habitat id'
+        for species in habitat_json.pokemon_species {
+            triples.push(Triple {
+                subject: habitat_id.into(),
+                predicate: NamedNode::new(format!("{POKEMONKG}hasPokemonSpecies"))?,
+                object: NamedNodeRef::new(species.url.as_str())?.into(),
+            });
+        }
 
         for t in triples {
             tx.send(format!("{t} ."))
@@ -1597,11 +1948,9 @@ async fn shapes_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(shapes.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in shapes {
+    for (index, p) in shapes.into_iter().enumerate() {
         pb.set_message(format!("shape #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let shape_id = NamedNodeRef::new(p.url.as_str())?;
         let shape_json = match p.follow(&client).await {
@@ -1647,7 +1996,13 @@ async fn shapes_to_nt(
             }
         }
 
-        // TODO pokemon species: skip since same query can be acheived by querying '?species pdb:shape id'
+        for species in shape_json.pokemon_species {
+            triples.push(Triple {
+                subject: shape_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasPokemonSpecies"))?,
+                object: NamedNodeRef::new(species.url.as_str())?.into(),
+            });
+        }
 
         for t in triples {
             tx.send(format!("{t} ."))
@@ -1671,11 +2026,9 @@ async fn egg_group_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(egg_groups.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in egg_groups {
+    for (index, p) in egg_groups.into_iter().enumerate() {
         pb.set_message(format!("egg group #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let group_id = NamedNodeRef::new(p.url.as_str())?;
         let group_json = match p.follow(&client).await {
@@ -1708,7 +2061,14 @@ async fn egg_group_to_nt(
                 });
             }
         }
-        // TODO pokemon species: skip since same query can be acheived by querying '?species pdb:egg_group id'
+
+        for species in group_json.pokemon_species {
+            triples.push(Triple {
+                subject: group_id.into(),
+                predicate: NamedNode::new(format!("{POKE}hasPokemonSpecies"))?,
+                object: NamedNodeRef::new(species.url.as_str())?.into(),
+            });
+        }
 
         for t in triples {
             tx.send(format!("{t} ."))
@@ -1732,11 +2092,9 @@ async fn form_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_forms.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_forms {
+    for (index, p) in all_forms.into_iter().enumerate() {
         pb.set_message(format!("form #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let form_id = NamedNodeRef::new(p.url.as_str())?;
         let form_json = match p.follow(&client).await {
@@ -1852,12 +2210,10 @@ async fn type_to_nt(
         }
     };
     let pb = bar.add(ProgressBar::new(all_types.len().try_into().unwrap()));
-    let mut index = 0;
-    for t in all_types {
+    for (index, t) in all_types.into_iter().enumerate() {
         //if !self.types.contains(&t.type_.url) {
         pb.set_message(format!("type #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples = vec![];
         //self.types.insert(t.url.clone());
         let type_id = NamedNodeRef::new(&t.url)?;
@@ -1999,14 +2355,10 @@ async fn move_to_nt(
         }
     };
     let pb = bar.add(ProgressBar::new(all_moves.len().try_into().unwrap()));
-    let mut index = 0;
-    for m in all_moves {
+    for (index, m) in all_moves.into_iter().enumerate() {
         pb.set_message(format!("move #{}", index + 1));
         pb.inc(1);
-        index += 1;
-        //if !self.moves.contains(&m.move_.url) {
         let mut triples = vec![];
-        //self.moves.insert(m.move_.url.clone());
         let move_id = NamedNodeRef::new(&m.url)?;
         // Add rdf:type declaration
         triples.push(create_type_triple(move_id, "Move")?);
@@ -2279,11 +2631,9 @@ async fn ability_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_abilities.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_abilities {
+    for (index, p) in all_abilities.into_iter().enumerate() {
         pb.set_message(format!("ability #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let ability_id = NamedNodeRef::new(p.url.as_str())?;
         let ability_json = match p.follow(&client).await {
@@ -2346,7 +2696,13 @@ async fn ability_to_nt(
             }
         }
 
-        // TODO pokemon: skip since same query can be acheived by querying '?pokemon pdb:hasAbility id'
+        for pokemon in ability_json.pokemon {
+            triples.push(Triple {
+                subject: ability_id.into(),
+                predicate: NamedNode::new(format!("{POKE}mayBeFoundInPokemon"))?,
+                object: NamedNodeRef::new(pokemon.pokemon.url.as_str())?.into(),
+            });
+        }
 
         for t in triples {
             tx.send(format!("{t} ."))
@@ -2371,11 +2727,9 @@ async fn pokemon_to_nt(
     };
 
     let pb = bar.add(ProgressBar::new(all_pokemon.len().try_into().unwrap()));
-    let mut index = 0;
-    for p in all_pokemon {
+    for (index, p) in all_pokemon.into_iter().enumerate() {
         pb.set_message(format!("pokemon #{}", index + 1));
         pb.inc(1);
-        index += 1;
         let mut triples: Vec<Triple> = vec![];
         let pokemon_id = NamedNodeRef::new(p.url.as_str())?;
         let pokemon_json = match p.follow(&client).await {
