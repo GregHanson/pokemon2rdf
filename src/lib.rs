@@ -124,6 +124,7 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // TODO VersionGroup
     // TODO PokeathonStat
     // TODO MoveBattleStyle
+    // TODO LocationAreaEncounter
 
     Ok(())
 }
@@ -735,6 +736,25 @@ async fn item_to_nt(
         }
 
         // TODO game_indices
+        for index in item_json.game_indices {
+            let gi_id = BlankNode::default();
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}gameIndex"))?,
+                object: gi_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: gi_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}index"))?,
+                object: Literal::new_typed_literal(index.game_index.to_string(), xsd::INTEGER)
+                    .into(),
+            });
+            triples.push(Triple {
+                subject: gi_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}generation"))?,
+                object: NamedNode::new(index.generation.url)?.into(),
+            });
+        }
 
         for name in item_json.names {
             // TODO only english for now
@@ -748,6 +768,15 @@ async fn item_to_nt(
         }
 
         // TODO sprites
+        if let Some(sprite) = item_json.sprites.default {
+            // rustemon defines sprite as Option<String>, PokeAPI has image URL:
+            // example: https://pokeapi.co/api/v2/item/1
+            triples.push(Triple {
+                subject: item_id.into(),
+                predicate: NamedNode::new(format!("{POKE}defaultSprite"))?,
+                object: NamedNode::new(sprite)?.into(),
+            });
+        }
 
         for poke in item_json.held_by_pokemon {
             let hold_id = BlankNode::default();
@@ -1307,7 +1336,11 @@ async fn species_to_nt(
             predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(species_json.name).into(),
         });
-        // TODO order
+        triples.push(Triple {
+            subject: species_id.into(),
+            predicate: NamedNode::new(format!("{POKE}order"))?,
+            object: Literal::new_typed_literal(species_json.order.to_string(), xsd::INTEGER).into(),
+        });
         triples.push(Triple {
             subject: species_id.into(),
             predicate: NamedNode::new(format!("{POKE}genderRate"))?,
@@ -2117,8 +2150,17 @@ async fn form_to_nt(
             predicate: NamedNode::new(format!("{SCHEMA}name"))?,
             object: Literal::new_simple_literal(form_json.name).into(),
         });
-        // TODO order
-        // TODO form_order
+        triples.push(Triple {
+            subject: form_id.into(),
+            predicate: NamedNode::new(format!("{POKE}order"))?,
+            object: Literal::new_typed_literal(form_json.order.to_string(), xsd::INTEGER).into(),
+        });
+        triples.push(Triple {
+            subject: form_id.into(),
+            predicate: NamedNode::new(format!("{POKE}formOrder"))?,
+            object: Literal::new_typed_literal(form_json.form_order.to_string(), xsd::INTEGER)
+                .into(),
+        });
         triples.push(Triple {
             subject: form_id.into(),
             predicate: NamedNode::new(format!("{POKE}formName"))?,
@@ -2155,17 +2197,73 @@ async fn form_to_nt(
                 predicate: NamedNode::new(format!("{POKEMONKG}hasType"))?,
                 object: NamedNode::new(t.type_.url)?.into(),
             });
-            // type information is already collected at the top level for pokemon, no need to duplicate the get logic here too
         }
 
         // TODO sprites
+        if let Some(back_default) = form_json.sprites.back_default {
+            // rustemon has Option<String> for sprites, while PokeAPI has image URLs
+            // example: https://pokeapi.co/api/v2/pokemon-form/1/
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backDefaultSprite"))?,
+                object: NamedNode::new(back_default)?.into(),
+            });
+        }
+        if let Some(front_default) = form_json.sprites.front_default {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontDefaultSprite"))?,
+                object: NamedNode::new(front_default)?.into(),
+            });
+        }
+        if let Some(back_shiny) = form_json.sprites.back_shiny {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backShinySprite"))?,
+                object: NamedNode::new(back_shiny)?.into(),
+            });
+        }
+        if let Some(front_shiny) = form_json.sprites.front_shiny {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontShinySprite"))?,
+                object: NamedNode::new(front_shiny)?.into(),
+            });
+        }
+        if let Some(back_shiny_female) = form_json.sprites.back_shiny_female {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backShinyFemaleSprite"))?,
+                object: NamedNode::new(back_shiny_female)?.into(),
+            });
+        }
+        if let Some(front_shiny_female) = form_json.sprites.front_shiny_female {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontShinyFemaleSprite"))?,
+                object: NamedNode::new(front_shiny_female)?.into(),
+            });
+        }
+        if let Some(back_female) = form_json.sprites.back_female {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backFemaleSprite"))?,
+                object: NamedNode::new(back_female)?.into(),
+            });
+        }
+        if let Some(front_female) = form_json.sprites.front_female {
+            triples.push(Triple {
+                subject: form_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontFemaleSprite"))?,
+                object: NamedNode::new(front_female)?.into(),
+            });
+        }
         // version_group
         triples.push(Triple {
             subject: form_id.into(),
             predicate: NamedNode::new(format!("{POKE}versionGroup"))?,
             object: NamedNode::new(form_json.version_group.url)?.into(),
         });
-        // TODO version_group_to_nt
         // names
         for n in form_json.names {
             // TODO only english for now
@@ -2470,7 +2568,6 @@ async fn move_to_nt(
                     predicate: NamedNode::new(format!("{POKE}versionGroup"))?,
                     object: NamedNode::new(effect.version_group.url)?.into(),
                 });
-                // TODO version_group_to_nt
             }
         }
         // learned_by_pokemon
@@ -2592,7 +2689,6 @@ async fn move_to_nt(
                 predicate: NamedNode::new(format!("{POKE}change"))?,
                 object: Literal::new_typed_literal(stat.change.to_string(), xsd::INTEGER).into(),
             });
-            // TODO get stat URL?
         }
         // TODO super_contest_effect
 
@@ -2771,7 +2867,12 @@ async fn pokemon_to_nt(
         });
 
         // is_default
-        // order
+
+        triples.push(Triple {
+            subject: pokemon_id.into(),
+            predicate: NamedNode::new(format!("{POKE}order"))?,
+            object: Literal::new_typed_literal(pokemon_json.order.to_string(), xsd::INTEGER).into(),
+        });
 
         triples.push(Triple {
             subject: pokemon_id.into(),
@@ -2838,9 +2939,6 @@ async fn pokemon_to_nt(
                     .into(),
                 });
             }
-            // self.move_to_nt(m, client).await?;
-            // TODO version_group_to_nt
-            // TODO move_learn_method_to_nt
         }
 
         // forms
@@ -2853,15 +2951,148 @@ async fn pokemon_to_nt(
             });
         }
 
-        // TODO game_indices
+        for index in pokemon_json.game_indices.clone() {
+            let gi_id = BlankNode::default();
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}gameIndex"))?,
+                object: gi_id.as_ref().into(),
+            });
+            triples.push(Triple {
+                subject: gi_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}index"))?,
+                object: Literal::new_typed_literal(index.game_index.to_string(), xsd::INTEGER)
+                    .into(),
+            });
+            triples.push(Triple {
+                subject: gi_id.as_ref().into(),
+                predicate: NamedNode::new(format!("{POKE}generation"))?,
+                object: NamedNode::new(index.version.url)?.into(),
+            });
+        }
 
-        // TODO held_items
+        for item in pokemon_json.held_items.clone() {
+            for version_detail in item.version_details {
+                let v_id = BlankNode::default();
+                triples.push(Triple {
+                    subject: pokemon_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}mayHoldItem"))?,
+                    object: v_id.as_ref().into(),
+                });
+                triples.push(Triple {
+                    subject: v_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}item"))?,
+                    object: NamedNode::new(item.item.url.clone())?.into(),
+                });
+                triples.push(Triple {
+                    subject: v_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}version"))?,
+                    object: NamedNode::new(version_detail.version.url)?.into(),
+                });
+                triples.push(Triple {
+                    subject: v_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}rarity"))?,
+                    object: Literal::new_typed_literal(
+                        version_detail.rarity.to_string(),
+                        xsd::INTEGER,
+                    )
+                    .into(),
+                });
+            }
+        }
 
         // TODO location_area_encounters
+        // rustemon has String but PokeApi returns a URL
+        // example: https://pokeapi.co/api/v2/pokemon/10
+        triples.push(Triple {
+            subject: pokemon_id.into(),
+            predicate: NamedNode::new(format!("{POKE}locationAreaEncounters"))?,
+            object: NamedNode::new(pokemon_json.location_area_encounters.clone())?.into(),
+        });
 
         // TODO past_types
+        for p_type in pokemon_json.past_types.clone() {
+            for t in p_type.types {
+                let past_type_id = BlankNode::default();
+                triples.push(Triple {
+                    subject: pokemon_id.into(),
+                    predicate: NamedNode::new(format!("{POKE}pastType"))?,
+                    object: past_type_id.as_ref().into(),
+                });
+                triples.push(Triple {
+                    subject: past_type_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKEMONKG}hasType"))?,
+                    object: NamedNode::new(t.type_.url)?.into(),
+                });
+                triples.push(Triple {
+                    subject: past_type_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}generation"))?,
+                    object: NamedNode::new(p_type.generation.url.clone())?.into(),
+                });
+            }
+        }
 
         // TODO sprites
+        // one node with all sprite URLs as properties? Declare media type as image/png?
+        if let Some(front_default) = pokemon_json.sprites.front_default {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontDefaultSprite"))?,
+                object: NamedNode::new(front_default)?.into(),
+            });
+        }
+        if let Some(back_default) = pokemon_json.sprites.back_default {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backDefaultSprite"))?,
+                object: NamedNode::new(back_default)?.into(),
+            });
+        }
+        if let Some(front_shiny) = pokemon_json.sprites.front_shiny {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontShinySprite"))?,
+                object: NamedNode::new(front_shiny)?.into(),
+            });
+        }
+        if let Some(back_shiny) = pokemon_json.sprites.back_shiny {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backShinySprite"))?,
+                object: NamedNode::new(back_shiny)?.into(),
+            });
+        }
+        if let Some(front_female) = pokemon_json.sprites.front_female {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontFemaleSprite"))?,
+                object: NamedNode::new(front_female)?.into(),
+            });
+        }
+        if let Some(back_female) = pokemon_json.sprites.back_female {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backFemaleSprite"))?,
+                object: NamedNode::new(back_female)?.into(),
+            });
+        }
+        if let Some(front_female_shiny) = pokemon_json.sprites.front_shiny_female {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}frontFemaleShinySprite"))?,
+                object: NamedNode::new(front_female_shiny)?.into(),
+            });
+        }
+        if let Some(back_female_shiny) = pokemon_json.sprites.back_shiny_female {
+            triples.push(Triple {
+                subject: pokemon_id.into(),
+                predicate: NamedNode::new(format!("{POKE}backFemaleShinySprite"))?,
+                object: NamedNode::new(back_female_shiny)?.into(),
+            });
+        }
+
+        // OtherSprites
+        // VersionSprites
 
         // species
         let species_id = NamedNodeRef::new(&pokemon_json.species.url)?;
