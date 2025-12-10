@@ -91,6 +91,9 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     triggers::trigger_to_nt(m.clone(), client.clone(), tx.clone()).await?;
     pokedex::pokedex_to_nt(m.clone(), client.clone(), tx.clone()).await?;
     items::item_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    berries::berry_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    berry_firmness::firmness_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    berry_flavors::flavors_to_nt(m.clone(), client.clone(), tx.clone()).await?;
 
     // // Wait for all worker tasks to complete
     // for handle in handles {
@@ -103,9 +106,6 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Wait for the writer to finish processing all messages
     writer_handle.await??;
 
-    // TODO BerryFirmness
-    // TODO Berry Flavor
-    // TODO Berry
     // TODO ContestType
     // TODO EncounterCondition
     // TODO EncounterConditionValue

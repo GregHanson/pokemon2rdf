@@ -1,4 +1,7 @@
 pub(crate) mod abilities;
+pub(crate) mod berries;
+pub(crate) mod berry_firmness;
+pub(crate) mod berry_flavors;
 pub(crate) mod damage_class;
 pub(crate) mod egg_groups;
 pub(crate) mod evolutions_chains;
