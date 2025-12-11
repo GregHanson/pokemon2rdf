@@ -13,7 +13,7 @@ use crate::POKEMONKG;
 use crate::SCHEMA;
 
 pub async fn habitat_to_nt(
-    bar: MultiProgress,
+    bar: &MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -24,10 +24,12 @@ pub async fn habitat_to_nt(
             return Err(e.into());
         }
     };
-
-    let pb = bar.add(ProgressBar::new(habitats.len().try_into().unwrap()));
+    let len = habitats.len();
+    let pb =
+        bar.add(ProgressBar::new(len.try_into().unwrap()).with_style(crate::create_bar_style()));
+    pb.finish_with_message("done");
     for (index, p) in habitats.into_iter().enumerate() {
-        pb.set_message(format!("habitat #{}", index + 1));
+        pb.set_message(format!("habitat {}/{}", index + 1, len));
         pb.inc(1);
         let mut triples: Vec<Triple> = vec![];
         let habitat_id = NamedNodeRef::new(p.url.as_str())?;
@@ -88,7 +90,7 @@ mod tests {
     #[tokio::test]
     async fn test_habitats() {
         assert!((habitat_to_nt(
-            MultiProgress::new(),
+            &MultiProgress::new(),
             Arc::new(RustemonClient::default()),
             mpsc::unbounded_channel().0
         )

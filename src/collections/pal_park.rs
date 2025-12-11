@@ -12,7 +12,7 @@ use crate::POKE;
 use crate::SCHEMA;
 
 pub async fn pal_park_area_to_nt(
-    bar: MultiProgress,
+    bar: &MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -23,10 +23,12 @@ pub async fn pal_park_area_to_nt(
             return Err(e.into());
         }
     };
-
-    let pb = bar.add(ProgressBar::new(areas.len().try_into().unwrap()));
+    let len = areas.len();
+    let pb =
+        bar.add(ProgressBar::new(len.try_into().unwrap()).with_style(crate::create_bar_style()));
+    pb.finish_with_message("done");
     for (index, p) in areas.into_iter().enumerate() {
-        pb.set_message(format!("pal park area #{}", index + 1));
+        pb.set_message(format!("pal park area {}/{}", index + 1, len));
         pb.inc(1);
         let mut triples: Vec<Triple> = vec![];
         let area_id = NamedNodeRef::new(p.url.as_str())?;
@@ -104,7 +106,7 @@ mod tests {
     #[tokio::test]
     async fn test_pal_park_areas() {
         assert!((pal_park_area_to_nt(
-            MultiProgress::new(),
+            &MultiProgress::new(),
             Arc::new(RustemonClient::default()),
             mpsc::unbounded_channel().0
         )

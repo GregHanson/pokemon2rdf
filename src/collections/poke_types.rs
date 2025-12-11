@@ -12,7 +12,7 @@ use crate::POKE;
 use crate::SCHEMA;
 
 pub async fn type_to_nt(
-    bar: MultiProgress,
+    bar: &MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -23,10 +23,13 @@ pub async fn type_to_nt(
             return Err(e.into());
         }
     };
-    let pb = bar.add(ProgressBar::new(all_types.len().try_into().unwrap()));
+    let len = all_types.len();
+    let pb =
+        bar.add(ProgressBar::new(len.try_into().unwrap()).with_style(crate::create_bar_style()));
+    pb.finish_with_message("done");
     for (index, t) in all_types.into_iter().enumerate() {
         //if !self.types.contains(&t.type_.url) {
-        pb.set_message(format!("type #{}", index + 1));
+        pb.set_message(format!("type {}/{}", index + 1, len));
         pb.inc(1);
         let mut triples = vec![];
         //self.types.insert(t.url.clone());
@@ -166,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn test_poke_types() {
         assert!((type_to_nt(
-            MultiProgress::new(),
+            &MultiProgress::new(),
             Arc::new(RustemonClient::default()),
             mpsc::unbounded_channel().0
         )

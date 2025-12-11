@@ -13,7 +13,7 @@ use crate::POKEMONKG;
 use crate::SCHEMA;
 
 pub async fn ability_to_nt(
-    bar: MultiProgress,
+    bar: &MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -24,10 +24,14 @@ pub async fn ability_to_nt(
             return Err(e.into());
         }
     };
-
-    let pb = bar.add(ProgressBar::new(all_abilities.len().try_into().unwrap()));
+    let len = all_abilities.len();
+    let pb = bar.add(
+        ProgressBar::new(len.try_into().unwrap())
+            .with_style(crate::create_bar_style()),
+    );
+    pb.finish_with_message("done");
     for (index, p) in all_abilities.into_iter().enumerate() {
-        pb.set_message(format!("ability #{}", index + 1));
+        pb.set_message(format!("ability {}/{}", index + 1, len));
         pb.inc(1);
         let mut triples: Vec<Triple> = vec![];
         let ability_id = NamedNodeRef::new(p.url.as_str())?;
@@ -116,7 +120,7 @@ mod tests {
     #[tokio::test]
     async fn test_abilities() {
         assert!((ability_to_nt(
-            MultiProgress::new(),
+            &MultiProgress::new(),
             Arc::new(RustemonClient::default()),
             mpsc::unbounded_channel().0
         )

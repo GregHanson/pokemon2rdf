@@ -70,9 +70,9 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // let mut handles = vec![];
 
     // berry endpoints
-    berries::berry_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    berry_firmness::firmness_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    berry_flavors::flavors_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    berries::berry_to_nt(&m, client.clone(), tx.clone()).await?;
+    berry_firmness::firmness_to_nt(&m, client.clone(), tx.clone()).await?;
+    berry_flavors::flavors_to_nt(&m, client.clone(), tx.clone()).await?;
 
     // contests endpoints
     // TODO contest type
@@ -85,56 +85,56 @@ pub async fn build_graph() -> Result<(), Box<dyn Error + Send + Sync>> {
     // TODO encounter condition value
 
     // evolution endpoints
-    evolutions_chains::evolution_chain_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    triggers::trigger_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    evolutions_chains::evolution_chain_to_nt(&m, client.clone(), tx.clone()).await?;
+    triggers::trigger_to_nt(&m, client.clone(), tx.clone()).await?;
 
     // games endpoints
-    generations::generation_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    pokedex::pokedex_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    generations::generation_to_nt(&m, client.clone(), tx.clone()).await?;
+    pokedex::pokedex_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO version
     // TODO version group
 
     // items endpoints
-    items::item_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    items::item_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO item attribute
     // TODO item category
     // TODO item fling effect
     // TODO item pocket
 
     // locations endpoints
-    locations::location_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    locations::location_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO location area
-    pal_park::pal_park_area_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    regions::region_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    pal_park::pal_park_area_to_nt(&m, client.clone(), tx.clone()).await?;
+    regions::region_to_nt(&m, client.clone(), tx.clone()).await?;
 
     // Machines endpoints
     // TODO machine
 
     // moves endpoints
-    moves::move_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    moves::move_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO move ailment
     // TODO move battle style
     // TODO move category
-    damage_class::damage_class_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    damage_class::damage_class_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO move learn method
-    move_target::move_target_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    move_target::move_target_to_nt(&m, client.clone(), tx.clone()).await?;
 
     // pokemon endpoints
-    abilities::ability_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    abilities::ability_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO characteristic
-    egg_groups::egg_group_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    egg_groups::egg_group_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO gender
-    growth_rates::growth_rate_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    natures::nature_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    growth_rates::growth_rate_to_nt(&m, client.clone(), tx.clone()).await?;
+    natures::nature_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO pokeathlon stat
-    pokemon::pokemon_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    pokemon::pokemon_to_nt(&m, client.clone(), tx.clone()).await?;
     // TODO pokemon color
-    forms::form_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    habitats::habitat_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    shapes::shape_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    species::species_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    stats::stat_to_nt(m.clone(), client.clone(), tx.clone()).await?;
-    poke_types::type_to_nt(m.clone(), client.clone(), tx.clone()).await?;
+    forms::form_to_nt(&m, client.clone(), tx.clone()).await?;
+    habitats::habitat_to_nt(&m, client.clone(), tx.clone()).await?;
+    shapes::shape_to_nt(&m, client.clone(), tx.clone()).await?;
+    species::species_to_nt(&m, client.clone(), tx.clone()).await?;
+    stats::stat_to_nt(&m, client.clone(), tx.clone()).await?;
+    poke_types::type_to_nt(&m, client.clone(), tx.clone()).await?;
 
     // // Wait for all worker tasks to complete
     // for handle in handles {
@@ -186,6 +186,11 @@ fn create_type_triple(
         predicate: vocab::rdf::TYPE.into(),
         object: NamedNode::new(format!("{}{}", namespace, class_name))?.into(),
     })
+}
+
+fn create_bar_style() -> ProgressStyle {
+    ProgressStyle::with_template("{spinner} {msg}")
+        .unwrap()
 }
 
 #[cfg(test)]

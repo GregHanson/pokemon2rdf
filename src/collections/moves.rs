@@ -13,7 +13,7 @@ use crate::POKEMONKG;
 use crate::SCHEMA;
 
 pub async fn move_to_nt(
-    bar: MultiProgress,
+    bar: &MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -24,9 +24,12 @@ pub async fn move_to_nt(
             return Err(e.into());
         }
     };
-    let pb = bar.add(ProgressBar::new(all_moves.len().try_into().unwrap()));
+    let len = all_moves.len();
+    let pb =
+        bar.add(ProgressBar::new(len.try_into().unwrap()).with_style(crate::create_bar_style()));
+    pb.finish_with_message("done");
     for (index, m) in all_moves.into_iter().enumerate() {
-        pb.set_message(format!("move #{}", index + 1));
+        pb.set_message(format!("move {}/{}", index + 1, len));
         pb.inc(1);
         let mut triples = vec![];
         let move_id = NamedNodeRef::new(&m.url)?;
@@ -293,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn test_moves() {
         assert!((move_to_nt(
-            MultiProgress::new(),
+            &MultiProgress::new(),
             Arc::new(RustemonClient::default()),
             mpsc::unbounded_channel().0
         )

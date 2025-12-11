@@ -14,7 +14,7 @@ use crate::POKEMONKG;
 use crate::SCHEMA;
 
 pub async fn evolution_chain_to_nt(
-    bar: MultiProgress,
+    bar: &MultiProgress,
     client: Arc<RustemonClient>,
     tx: mpsc::UnboundedSender<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -25,10 +25,12 @@ pub async fn evolution_chain_to_nt(
             return Err(e.into());
         }
     };
-
-    let pb = bar.add(ProgressBar::new(chains.len().try_into().unwrap()));
+    let len = chains.len();
+    let pb =
+        bar.add(ProgressBar::new(len.try_into().unwrap()).with_style(crate::create_bar_style()));
+    pb.finish_with_message("done");
     for (index, p) in chains.into_iter().enumerate() {
-        pb.set_message(format!("evolution chain #{}", index + 1));
+        pb.set_message(format!("evolution chain {}/{}", index + 1, len));
         pb.inc(1);
         let mut triples: Vec<Triple> = vec![];
         let chain_id = NamedNodeRef::new(p.url.as_str())?;
@@ -251,7 +253,7 @@ mod tests {
     #[tokio::test]
     async fn test_evolution_chains() {
         assert!((evolution_chain_to_nt(
-            MultiProgress::new(),
+            &MultiProgress::new(),
             Arc::new(RustemonClient::default()),
             mpsc::unbounded_channel().0
         )
