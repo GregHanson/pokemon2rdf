@@ -207,11 +207,92 @@ pub async fn pokemon_to_nt(
         // TODO location_area_encounters
         // rustemon has String but PokeApi returns a URL
         // example: https://pokeapi.co/api/v2/pokemon/10
+        let lae_id = NamedNode::new(pokemon_json.location_area_encounters.clone())?;
         triples.push(Triple {
             subject: pokemon_id.into(),
-            predicate: NamedNode::new(format!("{POKE}locationAreaEncounters"))?,
-            object: NamedNode::new(pokemon_json.location_area_encounters.clone())?.into(),
+            predicate: NamedNode::new(format!("{POKE}hasLocationAreaEncounter"))?,
+            object: lae_id.as_ref().into(),
         });
+        for location_area_encounter in
+            rustemon::pokemon::pokemon::encounters::get_by_id(pokemon_json.id, &client).await?
+        {
+            for version_detail in location_area_encounter.version_details {
+                let vd_id = BlankNode::default();
+
+                triples.push(Triple {
+                    subject: lae_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}locationAreaEncounter"))?,
+                    object: vd_id.as_ref().into(),
+                });
+                triples.push(Triple {
+                    subject: vd_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}locationArea"))?,
+                    object: NamedNode::new(location_area_encounter.location_area.url.clone())?
+                        .into(),
+                });
+                triples.push(Triple {
+                    subject: vd_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}version"))?,
+                    object: NamedNode::new(version_detail.version.url)?.into(),
+                });
+                triples.push(Triple {
+                    subject: vd_id.as_ref().into(),
+                    predicate: NamedNode::new(format!("{POKE}maxChance"))?,
+                    object: Literal::new_typed_literal(
+                        version_detail.max_chance.to_string(),
+                        xsd::INTEGER,
+                    )
+                    .into(),
+                });
+                for encounter_detail in version_detail.encounter_details {
+                    let ed_id = BlankNode::default();
+                    triples.push(Triple {
+                        subject: vd_id.as_ref().into(),
+                        predicate: NamedNode::new(format!("{POKE}encounterDetail"))?,
+                        object: ed_id.as_ref().into(),
+                    });
+                    triples.push(Triple {
+                        subject: ed_id.as_ref().into(),
+                        predicate: NamedNode::new(format!("{POKE}method"))?,
+                        object: NamedNode::new(encounter_detail.method.url)?.into(),
+                    });
+                    triples.push(Triple {
+                        subject: ed_id.as_ref().into(),
+                        predicate: NamedNode::new(format!("{POKE}chance"))?,
+                        object: Literal::new_typed_literal(
+                            encounter_detail.chance.to_string(),
+                            xsd::INTEGER,
+                        )
+                        .into(),
+                    });
+                    triples.push(Triple {
+                        subject: ed_id.as_ref().into(),
+                        predicate: NamedNode::new(format!("{POKE}minLevel"))?,
+                        object: Literal::new_typed_literal(
+                            encounter_detail.min_level.to_string(),
+                            xsd::INTEGER,
+                        )
+                        .into(),
+                    });
+                    triples.push(Triple {
+                        subject: ed_id.as_ref().into(),
+                        predicate: NamedNode::new(format!("{POKE}maxLevel"))?,
+                        object: Literal::new_typed_literal(
+                            encounter_detail.max_level.to_string(),
+                            xsd::INTEGER,
+                        )
+                        .into(),
+                    });
+                    for condition in encounter_detail.condition_values {
+                        triples.push(Triple {
+                            subject: ed_id.as_ref().into(),
+                            predicate: NamedNode::new(format!("{POKE}hasCondition"))?,
+                            object: NamedNode::new(condition.url)?.into(),
+                        });
+                    }
+                }
+            }
+        }
 
         // TODO past_types
         for p_type in pokemon_json.past_types.clone() {
