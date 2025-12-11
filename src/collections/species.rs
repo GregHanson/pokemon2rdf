@@ -131,8 +131,8 @@ pub async fn species_to_nt(
         });
 
         // TODO pokedex_numbers
-        for pokedex in species_json.pokedex_numbers {
-            let pdx_id = BlankNode::default();
+        for (i, pokedex) in species_json.pokedex_numbers.into_iter().enumerate() {
+            let pdx_id = BlankNode::new(format!("species{}_pokedexnumber{}", species_json.id, i))?;
             triples.push(Triple {
                 subject: species_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasPokedexNumber"))?,
@@ -215,8 +215,9 @@ pub async fn species_to_nt(
             }
         }
         // TODO pal_park_encounters
-        for enc in species_json.pal_park_encounters {
-            let enc_id = BlankNode::default();
+        for (i, enc) in species_json.pal_park_encounters.into_iter().enumerate() {
+            let enc_id =
+                BlankNode::new(format!("species{}_palparkencounter{}", species_json.id, i))?;
             triples.push(Triple {
                 subject: species_id.into(),
                 predicate: NamedNode::new(format!("{POKE}palParkEncounters"))?,
@@ -240,10 +241,11 @@ pub async fn species_to_nt(
         }
 
         // flavor_text_entries
-        for f in species_json.flavor_text_entries {
+        for (i, f) in species_json.flavor_text_entries.into_iter().enumerate() {
             // TODO only english for now
             if f.language.name == "en" {
-                let flavor_id = BlankNode::default();
+                let flavor_id =
+                    BlankNode::new(format!("species{}_flavortext{}", species_json.id, i))?;
                 triples.push(Triple {
                     subject: species_id.into(),
                     predicate: NamedNode::new(format!("{POKE}flavorText"))?,

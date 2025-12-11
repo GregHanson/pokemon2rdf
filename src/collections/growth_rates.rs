@@ -66,7 +66,8 @@ pub async fn growth_rate_to_nt(
             }
         }
         for l in growth_json.levels {
-            let level_id = BlankNode::default();
+            let level_id =
+                BlankNode::new(format!("growthrate{}_explevel{}", growth_json.id, l.level))?;
             triples.push(Triple {
                 subject: growth_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasExpLevel"))?,

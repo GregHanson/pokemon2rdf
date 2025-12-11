@@ -67,8 +67,8 @@ pub async fn location_to_nt(
                 });
             }
         }
-        for gi in location_json.game_indices {
-            let gi_id = BlankNode::default();
+        for (i, gi) in location_json.game_indices.into_iter().enumerate() {
+            let gi_id = BlankNode::new(format!("location{}_gameindex{}", location_json.id, i))?;
             triples.push(Triple {
                 subject: location_id.into(),
                 predicate: NamedNode::new(format!("{POKE}gameIndex"))?,

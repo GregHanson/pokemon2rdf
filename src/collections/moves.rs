@@ -121,10 +121,10 @@ pub async fn move_to_nt(
                 });
             }
         }
-        for effect in move_json.flavor_text_entries.clone() {
+        for (i, effect) in move_json.flavor_text_entries.into_iter().enumerate() {
             // TODO only english for now
             if effect.language.name == "en" {
-                let flavor_id = BlankNode::default();
+                let flavor_id = BlankNode::new(format!("move{}_flavortext{}", move_json.id, i))?;
                 triples.push(Triple {
                     subject: move_id.into(),
                     predicate: NamedNode::new(format!("{POKE}flavorText"))?,

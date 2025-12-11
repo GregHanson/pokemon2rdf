@@ -29,8 +29,8 @@ pub async fn flavors_to_nt(
         pb.set_message(format!("berry flavors #{}", index + 1));
         pb.inc(1);
         let mut triples: Vec<Triple> = vec![];
-        let berry_id = NamedNodeRef::new(p.url.as_str())?;
-        let berry_json = match p.follow(&client).await {
+        let berry_flavor_id = NamedNodeRef::new(p.url.as_str())?;
+        let berry_flavor_json = match p.follow(&client).await {
             Ok(list) => list,
             Err(e) => {
                 println!("error getting berry flavor info for {}: {e}", &p.url);
@@ -38,48 +38,50 @@ pub async fn flavors_to_nt(
             }
         };
         // Add rdf:type declaration
-        triples.push(create_type_triple(berry_id, "Berry")?);
+        triples.push(create_type_triple(berry_flavor_id, "BerryFlavor")?);
 
         triples.push(Triple {
-            subject: berry_id.into(),
+            subject: berry_flavor_id.into(),
             predicate: NamedNode::new(format!("{SCHEMA}identifier"))?,
-            object: Literal::new_typed_literal(berry_json.id.to_string(), xsd::INTEGER).into(),
+            object: Literal::new_typed_literal(berry_flavor_json.id.to_string(), xsd::INTEGER)
+                .into(),
         });
         triples.push(Triple {
-            subject: berry_id.into(),
+            subject: berry_flavor_id.into(),
             predicate: NamedNode::new(format!("{SCHEMA}name"))?,
-            object: Literal::new_simple_literal(berry_json.name).into(),
+            object: Literal::new_simple_literal(berry_flavor_json.name).into(),
         });
-        for berry in berry_json.berries {
-            let flavor_id = BlankNode::default();
+        for (i, berry) in berry_flavor_json.berries.into_iter().enumerate() {
+            let flavor_to_berry_id =
+                BlankNode::new(format!("flavor{}_berry{}", berry_flavor_json.id, i))?;
             triples.push(Triple {
-                subject: berry_id.into(),
+                subject: berry_flavor_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasFlavor"))?,
-                object: flavor_id.as_ref().into(),
+                object: flavor_to_berry_id.as_ref().into(),
             });
             triples.push(Triple {
-                subject: flavor_id.as_ref().into(),
+                subject: flavor_to_berry_id.as_ref().into(),
                 predicate: NamedNode::new(format!("{POKE}potency"))?,
                 object: Literal::new_typed_literal(berry.potency.to_string(), xsd::INTEGER).into(),
             });
             triples.push(Triple {
-                subject: flavor_id.as_ref().into(),
+                subject: flavor_to_berry_id.as_ref().into(),
                 predicate: NamedNode::new(format!("{POKE}forBerry"))?,
                 object: NamedNode::new(berry.berry.url)?.into(),
             });
         }
 
         triples.push(Triple {
-            subject: berry_id.into(),
+            subject: berry_flavor_id.into(),
             predicate: NamedNode::new(format!("{POKE}contestType"))?,
-            object: NamedNode::new(berry_json.contest_type.url)?.into(),
+            object: NamedNode::new(berry_flavor_json.contest_type.url)?.into(),
         });
 
-        for name in berry_json.names {
+        for name in berry_flavor_json.names {
             // Only include English names for now
             if name.language.name == "en" {
                 triples.push(Triple {
-                    subject: berry_id.into(),
+                    subject: berry_flavor_id.into(),
                     predicate: NamedNode::new(format!("{POKE}names"))?,
                     object: Literal::new_simple_literal(name.name).into(),
                 });

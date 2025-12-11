@@ -62,8 +62,9 @@ pub async fn pal_park_area_to_nt(
             }
         }
 
-        for enc in area_json.pokemon_encounters {
-            let enc_id = BlankNode::default();
+        for (i, enc) in area_json.pokemon_encounters.into_iter().enumerate() {
+            let enc_id =
+                BlankNode::new(format!("palparkarea{}_pokemonencounter{}", area_json.id, i))?;
             triples.push(Triple {
                 subject: area_id.into(),
                 predicate: NamedNode::new(format!("{POKE}pokemonEncounters"))?,

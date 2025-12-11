@@ -81,8 +81,15 @@ pub async fn nature_to_nt(
             });
         }
 
-        for preference in nature_json.move_battle_style_preferences {
-            let pref_id = BlankNode::default();
+        for (i, preference) in nature_json
+            .move_battle_style_preferences
+            .into_iter()
+            .enumerate()
+        {
+            let pref_id = BlankNode::new(format!(
+                "nature{}_battlestylepreference{}",
+                nature_json.id, i
+            ))?;
             triples.push(Triple {
                 subject: nature_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasMoveBattleStylePreference"))?,
@@ -113,8 +120,11 @@ pub async fn nature_to_nt(
             });
         }
 
-        for pokeathlon_stat in nature_json.pokeathlon_stat_changes {
-            let stat_change_id = BlankNode::default();
+        for (i, pokeathlon_stat) in nature_json.pokeathlon_stat_changes.into_iter().enumerate() {
+            let stat_change_id = BlankNode::new(format!(
+                "nature{}_pokeathlonstatchange{}",
+                nature_json.id, i
+            ))?;
             triples.push(Triple {
                 subject: nature_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasPokeathlonStatChange"))?,

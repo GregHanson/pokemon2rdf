@@ -51,8 +51,8 @@ pub async fn stat_to_nt(
             object: Literal::new_simple_literal(stat_json.name).into(),
         });
 
-        for decrease in stat_json.affecting_moves.decrease {
-            let affect_id = BlankNode::default();
+        for (i, decrease) in stat_json.affecting_moves.decrease.into_iter().enumerate() {
+            let affect_id = BlankNode::new(format!("stat{}_decreasedByMove{}", stat_json.id, i))?;
             triples.push(Triple {
                 subject: stat_id.into(),
                 predicate: NamedNode::new(format!("{POKE}decreasedByMove"))?,
@@ -70,8 +70,8 @@ pub async fn stat_to_nt(
                 object: NamedNode::new(decrease.move_.url)?.into(),
             });
         }
-        for increase in stat_json.affecting_moves.increase {
-            let affect_id = BlankNode::default();
+        for (i, increase) in stat_json.affecting_moves.increase.into_iter().enumerate() {
+            let affect_id = BlankNode::new(format!("stat{}_increasedByMove{}", stat_json.id, i))?;
             triples.push(Triple {
                 subject: stat_id.into(),
                 predicate: NamedNode::new(format!("{POKE}increasedByMove"))?,

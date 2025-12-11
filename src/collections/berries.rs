@@ -93,8 +93,8 @@ pub async fn berry_to_nt(
             predicate: NamedNode::new(format!("{POKE}firmness"))?,
             object: NamedNode::new(berry_json.firmness.url)?.into(),
         });
-        for f in berry_json.flavors {
-            let flavor_id = BlankNode::default();
+        for (i, f) in berry_json.flavors.into_iter().enumerate() {
+            let flavor_id = BlankNode::new(format!("berry{}_flavor{}", berry_json.id, i))?;
             triples.push(Triple {
                 subject: berry_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasFlavor"))?,

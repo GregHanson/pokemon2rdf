@@ -93,9 +93,11 @@ pub async fn type_to_nt(
                 object: Literal::new_simple_literal(m.url).into(),
             });
         }
+
         // TODO past_damage_relations
-        for gi in type_json.game_indices {
-            let gi_id = BlankNode::default();
+
+        for (i, gi) in type_json.game_indices.into_iter().enumerate() {
+            let gi_id = BlankNode::new(format!("type{}_gameindex{}", type_json.id, i))?;
             triples.push(Triple {
                 subject: type_id.into(),
                 predicate: NamedNode::new(format!("{POKE}gameIndex"))?,

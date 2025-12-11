@@ -86,10 +86,10 @@ pub async fn item_to_nt(
             object: NamedNode::new(item_json.category.url)?.into(),
         });
 
-        for effect in item_json.effect_entries {
+        for (i, effect) in item_json.effect_entries.into_iter().enumerate() {
             // TODO only english for now
             if effect.language.name == "en" {
-                let effect_id = BlankNode::default();
+                let effect_id = BlankNode::new(format!("item{}_effect{}", item_json.id, i))?;
                 triples.push(Triple {
                     subject: item_id.into(),
                     predicate: NamedNode::new(format!("{POKE}hasEffect"))?,
@@ -120,8 +120,8 @@ pub async fn item_to_nt(
         }
 
         // TODO game_indices
-        for index in item_json.game_indices {
-            let gi_id = BlankNode::default();
+        for (i, index) in item_json.game_indices.into_iter().enumerate() {
+            let gi_id = BlankNode::new(format!("item{}_gameindex{}", item_json.id, i))?;
             triples.push(Triple {
                 subject: item_id.into(),
                 predicate: NamedNode::new(format!("{POKE}gameIndex"))?,
@@ -162,8 +162,8 @@ pub async fn item_to_nt(
             });
         }
 
-        for poke in item_json.held_by_pokemon {
-            let hold_id = BlankNode::default();
+        for (i, poke) in item_json.held_by_pokemon.into_iter().enumerate() {
+            let hold_id = BlankNode::new(format!("item{}_heldbypokemon{}", item_json.id, i))?;
             triples.push(Triple {
                 subject: item_id.into(),
                 predicate: NamedNode::new(format!("{POKE}heldByPokemon"))?,
@@ -174,8 +174,11 @@ pub async fn item_to_nt(
                 predicate: NamedNode::new(format!("{POKE}pokemon"))?,
                 object: NamedNode::new(poke.pokemon.url)?.into(),
             });
-            for version_detail in poke.version_details {
-                let version_detail_id = BlankNode::default();
+            for (j, version_detail) in poke.version_details.into_iter().enumerate() {
+                let version_detail_id = BlankNode::new(format!(
+                    "item{}_heldbypokemon{}_versiondetail{}",
+                    item_json.id, i, j
+                ))?;
                 triples.push(Triple {
                     subject: hold_id.as_ref().into(),
                     predicate: NamedNode::new(format!("{POKE}versionDetail"))?,

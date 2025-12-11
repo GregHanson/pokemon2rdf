@@ -103,8 +103,8 @@ pub async fn pokemon_to_nt(
         }
 
         // moves
-        for m in pokemon_json.moves.clone() {
-            let move_id = BlankNode::default();
+        for (i, m) in pokemon_json.moves.into_iter().enumerate() {
+            let move_id = BlankNode::new(format!("pokemon{}_move{}", pokemon_json.id, i))?;
             triples.push(Triple {
                 subject: pokemon_id.into(),
                 predicate: NamedNode::new(format!("{POKE}pokemonMove"))?,
@@ -115,8 +115,11 @@ pub async fn pokemon_to_nt(
                 predicate: NamedNode::new(format!("{POKE}move"))?,
                 object: NamedNode::new(m.move_.url)?.into(),
             });
-            for v in m.version_group_details {
-                let v_id = BlankNode::default();
+            for (j, v) in m.version_group_details.into_iter().enumerate() {
+                let v_id = BlankNode::new(format!(
+                    "pokemon{}_move{}_versionGroup{}",
+                    pokemon_json.id, i, j
+                ))?;
                 triples.push(Triple {
                     subject: move_id.as_ref().into(),
                     predicate: NamedNode::new(format!("{POKE}versionGroupDetails"))?,
@@ -154,8 +157,8 @@ pub async fn pokemon_to_nt(
             });
         }
 
-        for index in pokemon_json.game_indices.clone() {
-            let gi_id = BlankNode::default();
+        for (i, index) in pokemon_json.game_indices.into_iter().enumerate() {
+            let gi_id = BlankNode::new(format!("pokemon{}_gameIndex{}", pokemon_json.id, i))?;
             triples.push(Triple {
                 subject: pokemon_id.into(),
                 predicate: NamedNode::new(format!("{POKE}gameIndex"))?,
@@ -174,9 +177,12 @@ pub async fn pokemon_to_nt(
             });
         }
 
-        for item in pokemon_json.held_items.clone() {
-            for version_detail in item.version_details {
-                let v_id = BlankNode::default();
+        for (i, item) in pokemon_json.held_items.into_iter().enumerate() {
+            for (j, version_detail) in item.version_details.into_iter().enumerate() {
+                let v_id = BlankNode::new(format!(
+                    "pokemon{}_heldItem{}_versionDetail{}",
+                    pokemon_json.id, i, j
+                ))?;
                 triples.push(Triple {
                     subject: pokemon_id.into(),
                     predicate: NamedNode::new(format!("{POKE}mayHoldItem"))?,
@@ -213,11 +219,26 @@ pub async fn pokemon_to_nt(
             predicate: NamedNode::new(format!("{POKE}hasLocationAreaEncounter"))?,
             object: lae_id.as_ref().into(),
         });
-        for location_area_encounter in
-            rustemon::pokemon::pokemon::encounters::get_by_id(pokemon_json.id, &client).await?
-        {
-            for version_detail in location_area_encounter.version_details {
-                let vd_id = BlankNode::default();
+
+        let location_area_encounters =
+            rustemon::pokemon::pokemon::encounters::get_by_id(pokemon_json.id, &client)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "failed to get pokemon location area encounters {}: {e}",
+                        pokemon_json.location_area_encounters
+                    )
+                })?;
+        for (i, location_area_encounter) in location_area_encounters.into_iter().enumerate() {
+            for (j, version_detail) in location_area_encounter
+                .version_details
+                .into_iter()
+                .enumerate()
+            {
+                let vd_id = BlankNode::new(format!(
+                    "pokemon{}_locationAreaEncounter{}_versionDetail{}",
+                    pokemon_json.id, i, j
+                ))?;
 
                 triples.push(Triple {
                     subject: lae_id.as_ref().into(),
@@ -295,9 +316,12 @@ pub async fn pokemon_to_nt(
         }
 
         // TODO past_types
-        for p_type in pokemon_json.past_types.clone() {
-            for t in p_type.types {
-                let past_type_id = BlankNode::default();
+        for (i, p_type) in pokemon_json.past_types.into_iter().enumerate() {
+            for (j, t) in p_type.types.into_iter().enumerate() {
+                let past_type_id = BlankNode::new(format!(
+                    "pokemon{}_pastType{}_type{}",
+                    pokemon_json.id, i, j
+                ))?;
                 triples.push(Triple {
                     subject: pokemon_id.into(),
                     predicate: NamedNode::new(format!("{POKE}pastType"))?,
@@ -386,8 +410,8 @@ pub async fn pokemon_to_nt(
             object: species_id.into(),
         });
 
-        for stat in pokemon_json.stats {
-            let stat_id = BlankNode::default();
+        for (i, stat) in pokemon_json.stats.into_iter().enumerate() {
+            let stat_id = BlankNode::new(format!("pokemon{}_stat{}", pokemon_json.id, i))?;
             triples.push(Triple {
                 subject: pokemon_id.into(),
                 predicate: NamedNode::new(format!("{POKE}pokemonStat"))?,

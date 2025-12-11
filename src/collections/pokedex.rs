@@ -75,8 +75,8 @@ pub async fn pokedex_to_nt(
             }
         }
 
-        for entry in pokedex_json.pokemon_entries {
-            let entry_id = BlankNode::default();
+        for (i, entry) in pokedex_json.pokemon_entries.into_iter().enumerate() {
+            let entry_id = BlankNode::new(format!("pokedex{}_entry{}", pokedex_json.id, i))?;
             triples.push(Triple {
                 subject: pokedex_id.into(),
                 predicate: NamedNode::new(format!("{POKE}hasPokedexEntry"))?,

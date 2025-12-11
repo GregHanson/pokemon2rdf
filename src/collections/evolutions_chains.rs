@@ -92,8 +92,8 @@ pub fn chain_link_to_nt(
         predicate: NamedNode::new(format!("{POKE}species"))?,
         object: NamedNode::new(link.species.url.as_str())?.into(),
     });
-    for detail in &link.evolution_details {
-        let detail_id = BlankNode::default();
+    for (i, detail) in link.evolution_details.clone().into_iter().enumerate() {
+        let detail_id = BlankNode::new(format!("link{}_evolutionDetail{}", link_id, i))?;
         triples.push(Triple {
             subject: link_id.as_ref().into(),
             predicate: NamedNode::new(format!("{POKE}evolutionDetail"))?,
