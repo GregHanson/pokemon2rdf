@@ -1,6 +1,6 @@
 use indicatif::{MultiProgress, ProgressBar};
 use oxrdf::vocab::xsd;
-use oxrdf::{BlankNode, Literal, NamedNode, NamedNodeRef, Triple};
+use oxrdf::{BlankNode, BlankNodeRef, Literal, NamedNode, NamedNodeRef, Triple};
 use rustemon::client::RustemonClient;
 use rustemon::model::evolution::ChainLink;
 use rustemon::Follow;
@@ -57,11 +57,23 @@ pub async fn evolution_chain_to_nt(
         }
 
         // chain link
-        triples.extend_from_slice(&chain_link_to_nt(chain_id, &chain_json.chain)?);
+        let link_id = BlankNode::new(format!("chain{}_base", chain_json.id))?;
+        triples.push(Triple {
+            subject: chain_id.into(),
+            predicate: NamedNode::new(format!("{POKE}chain"))?,
+            object: link_id.as_ref().into(),
+        });
+        triples.extend_from_slice(&chain_link_to_nt(link_id.as_ref(), &chain_json.chain)?);
 
         // TODO evolves_to
-        for evolve in &chain_json.chain.evolves_to {
-            triples.extend_from_slice(&chain_link_to_nt(chain_id, evolve)?);
+        for (i, evolve) in chain_json.chain.evolves_to.into_iter().enumerate() {
+            let link_id = BlankNode::new(format!("chain{}_evolve{}", chain_json.id, i))?;
+            triples.push(Triple {
+                subject: chain_id.into(),
+                predicate: NamedNode::new(format!("{POKE}evolvesTo"))?,
+                object: link_id.as_ref().into(),
+            });
+            triples.extend_from_slice(&chain_link_to_nt(link_id.as_ref(), &evolve)?);
         }
         for t in triples {
             tx.send(format!("{t} ."))
@@ -72,30 +84,28 @@ pub async fn evolution_chain_to_nt(
 }
 
 pub fn chain_link_to_nt(
-    chain_id: NamedNodeRef,
+    link_id: BlankNodeRef,
     link: &ChainLink,
 ) -> Result<Vec<Triple>, Box<dyn Error + Send + Sync>> {
     let mut triples = vec![];
-    let link_id = BlankNode::default();
     triples.push(Triple {
-        subject: chain_id.into(),
-        predicate: NamedNode::new(format!("{POKE}link"))?,
-        object: link_id.as_ref().into(),
-    });
-    triples.push(Triple {
-        subject: chain_id.into(),
+        subject: link_id.into(),
         predicate: NamedNode::new(format!("{POKE}isBaby"))?,
         object: Literal::new_typed_literal(link.is_baby.to_string(), xsd::BOOLEAN).into(),
     });
     triples.push(Triple {
-        subject: link_id.as_ref().into(),
+        subject: link_id.into(),
         predicate: NamedNode::new(format!("{POKE}species"))?,
         object: NamedNode::new(link.species.url.as_str())?.into(),
     });
     for (i, detail) in link.evolution_details.clone().into_iter().enumerate() {
-        let detail_id = BlankNode::new(format!("link{}_evolutionDetail{}", link_id, i))?;
+        let detail_id = BlankNode::new(format!(
+            "link{}_evolutionDetail{}",
+            link_id.to_string().replace("_:", ""),
+            i
+        ))?;
         triples.push(Triple {
-            subject: link_id.as_ref().into(),
+            subject: link_id.into(),
             predicate: NamedNode::new(format!("{POKE}evolutionDetail"))?,
             object: detail_id.as_ref().into(),
         });
